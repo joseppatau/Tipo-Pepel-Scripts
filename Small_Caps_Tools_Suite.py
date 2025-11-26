@@ -3,6 +3,7 @@
 # Description: Small caps generator based on uppercase letter components
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing a single font at: https://www.myfonts.com/collections/tipo-pepel-foundry
+# Version: 1.0
 # License: MIT
 __doc__="""
 Small caps generator based on uppercase letter components"""
