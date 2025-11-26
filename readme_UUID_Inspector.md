@@ -51,6 +51,7 @@ Window with:
 3. Enter a UUID or character/name.
 
 ## Support the Author
+If you find this script useful, you can show your appreciation by purchasing a font:
 https://www.myfonts.com/collections/tipo-pepel-foundry
 
 ## License
