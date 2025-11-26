@@ -3,6 +3,7 @@
 # Description: Central panel with multiple tabs for kerning-related tools
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing a single font at: https://www.myfonts.com/collections/tipo-pepel-foundry
+# Version: 1.0
 # License: MIT
 __doc__="""
 Central panel with multiple tabs for kerning-related tools"""
