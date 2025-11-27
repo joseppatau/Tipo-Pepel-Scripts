@@ -24,7 +24,8 @@ engine** for more advanced tools.
 
 ### ✔ Accurate font metrics rendering
 
-Draws: - Ascender
+Draws: 
+- Ascender
 - Descender
 - x-Height
 - Cap height
