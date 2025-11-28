@@ -30,3 +30,22 @@ This script scans through all master layers in your font and re-creates any smar
 ## Output
 
 The script prints a message indicating how many smart components were re-linked:
+
+
+## Requirements
+
+- Glyphs App version 3
+- A font with smart components that need re-linking
+
+## Notes
+
+- Only processes master layers (ignores backup layers, special layers, etc.)
+- Preserves the layer structure and component stacking order
+- Safe to run multiple times if needed
+
+## Author
+
+Original concept/UI: **Josep Patau Bellart**\
+Refactor & optimization with AI assistance.
+If you find this script useful, you can show your appreciation by purchasing 
+a single font at: https://www.myfonts.com/collections/tipo-pepel-foundry
