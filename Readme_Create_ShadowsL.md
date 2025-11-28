@@ -57,7 +57,7 @@ The script will modify selected glyphs immediately. Use Cmd+Z to undo if needed.
 
 Designed by **Josep Patau Bellart**, programmed with AI tools
 
-**Support the author:** Purchase a font from [Tipo Pepel Foundry](https://www.myfonts.com/collections/tipo-pepel-foundry)
+**Support the author:** If you find this script useful, you can show your appreciation by purchasing a single font at: [Tipo Pepel Foundry](https://www.myfonts.com/collections/tipo-pepel-foundry)
 
 ## License
 
