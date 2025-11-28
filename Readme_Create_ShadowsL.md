@@ -1,10 +1,10 @@
 # Create Shadows Script for Glyphs App
 
-Create Shadows is a Glyphs App script that generates shadow-like shapes for selected glyphs by offsetting their paths in X and Y directions and performing boolean subtraction to create clean shadow contours.[web:1]
+Create Shadows is a Glyphs App script that generates shadow-like shapes for selected glyphs by offsetting their paths in X and Y directions and performing boolean subtraction to create clean shadow contours.
 
 ## Overview
 
-This script provides a floating control panel for type designers working in Glyphs App. It automates the creation of inline shadows or extruded effects by translating glyph outlines and subtracting the original shapes, leaving only the shadow region visible.[web:1]
+This script provides a floating control panel for type designers working in Glyphs App. It automates the creation of shadows or extruded effects by translating glyph outlines and subtracting the original shapes, leaving only the shadow region visible.
 
 ## Features
 
@@ -12,7 +12,6 @@ This script provides a floating control panel for type designers working in Glyp
 - Applies shadows to all currently selected glyphs simultaneously
 - Uses Glyphs' native boolean operations for clean path results
 - Preserves undo functionality for each glyph modification
-- Works destructively on master layers only (non-master layers cleared)
 
 ## Installation
 
@@ -64,12 +63,7 @@ Designed by **Josep Patau Bellart**, programmed with AI tools
 
 MIT License
 
-## Troubleshooting
 
-- **No effect:** Ensure glyphs are selected before running
-- **Error messages:** Enter numeric values only for ΔX/ΔY
-- **Script not appearing:** Check scripts folder path and reload scripts
-- **Complex glyphs fail:** Simplify paths or decompose components first
 
 
 
