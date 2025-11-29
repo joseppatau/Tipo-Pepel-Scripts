@@ -256,7 +256,7 @@ class KernTools:
             'lozenge'
         ]
 
-        # Combine lists CORRECTED - SEPARATED BY SCRIPT
+# Combine lists CORRECTED - SEPARATED BY SCRIPT
         # LATIN: only latin elements
         self.BASIC_LATIN_LOWERCASE = self.LATIN_LOWERCASE
         self.BASIC_LATIN_UPPERCASE = self.LATIN_UPPERCASE
@@ -831,6 +831,69 @@ class KernTools:
     def generatePairsGeneratorCallback(self, sender):
         self.generatePairsGenerator()
 
+    # --- MODIFIED FUNCTION: Contextual prefixes and suffixes that USE USER INPUT ---
+    def _getContextualSuffixes(self, left_glyph_name, right_glyph_name):
+        """
+        Internal helper that returns (prefix, suffix) according to user input OR glyph types.
+        """
+        # FIRST: Check if user has provided custom prefixes/suffixes
+        tab = self.w.tabs[0]
+        user_prefix = tab.prefixInput.get().strip()
+        user_suffix = tab.suffixInput.get().strip()
+        
+        # If user provided values, use them directly
+        if user_prefix or user_suffix:
+            return user_prefix, user_suffix
+        
+        # OTHERWISE: Use the default contextual behavior
+        font = Glyphs.font
+
+        # Helper: robust classification
+        def classify(name):
+            if not name:
+                return "uppercase"
+            g = font.glyphs[name] if name in font.glyphs else None
+
+            # Primary: Glyphs internal category/subCategory
+            if g:
+                cat = g.category or ""
+                sub = g.subCategory or ""
+
+                if "Smallcaps" in sub or ".sc" in name:
+                    return "smallcap"
+                if "Lowercase" in sub or sub == "Lower":
+                    return "lowercase"
+                if "Uppercase" in sub or sub == "Upper":
+                    return "uppercase"
+                if cat == "Number":
+                    return "number"
+                if cat in ("Punctuation", "Symbol"):
+                    return "symbol"
+
+            # Fallbacks by name
+            n = name.lower()
+            if ".sc" in n:
+                return "smallcap"
+            if any(num in n for num in ["zero","one","two","three","four","five","six","seven","eight","nine"]):
+                return "number"
+            if any(p in n for p in ["comma","period","hyphen","dash","colon","semicolon","paren","bracket","quote","question","exclam","slash","backslash"]):
+                return "symbol"
+            if name[0].islower():
+                return "lowercase"
+            if name[0].isupper():
+                return "uppercase"
+            return "symbol"
+
+        # Get both sides' types
+        left_type = classify(left_glyph_name)
+        right_type = classify(right_glyph_name)
+
+        # Assign contextual codes
+        prefix = "HHOH" if left_type in ("uppercase","number","symbol") else "hhoh"
+        suffix = "HOOH" if right_type in ("uppercase","number","symbol") else "hooh"
+
+        return prefix, suffix
+
     def generatePairsGenerator(self):
         font = Glyphs.font
         if not font:
@@ -1098,60 +1161,6 @@ class KernTools:
             out = valid_glyphs
         
         return sorted(set(out))
-
-    # --- NEW FUNCTION: Contextual prefixes and suffixes as internal util ---
-    def _getContextualSuffixes(self, left_glyph_name, right_glyph_name):
-        """
-        Internal helper that returns (prefix, suffix) according to glyph types.
-        Uses Glyphs' category and subCategory fields when available.
-        """
-        font = Glyphs.font
-
-        # Helper: robust classification
-        def classify(name):
-            if not name:
-                return "uppercase"
-            g = font.glyphs[name] if name in font.glyphs else None
-
-            # Primary: Glyphs internal category/subCategory
-            if g:
-                cat = g.category or ""
-                sub = g.subCategory or ""
-
-                if "Smallcaps" in sub or ".sc" in name:
-                    return "smallcap"
-                if "Lowercase" in sub or sub == "Lower":
-                    return "lowercase"
-                if "Uppercase" in sub or sub == "Upper":
-                    return "uppercase"
-                if cat == "Number":
-                    return "number"
-                if cat in ("Punctuation", "Symbol"):
-                    return "symbol"
-
-            # Fallbacks by name
-            n = name.lower()
-            if ".sc" in n:
-                return "smallcap"
-            if any(num in n for num in ["zero","one","two","three","four","five","six","seven","eight","nine"]):
-                return "number"
-            if any(p in n for p in ["comma","period","hyphen","dash","colon","semicolon","paren","bracket","quote","question","exclam","slash","backslash"]):
-                return "symbol"
-            if name[0].islower():
-                return "lowercase"
-            if name[0].isupper():
-                return "uppercase"
-            return "symbol"
-
-        # Get both sides' types
-        left_type = classify(left_glyph_name)
-        right_type = classify(right_glyph_name)
-
-        # Assign contextual codes
-        prefix = "HHOH" if left_type in ("uppercase","number","symbol") else "hhoh"
-        suffix = "HOOH" if right_type in ("uppercase","number","symbol") else "hooh"
-
-        return prefix, suffix
 
     # --- CORRECTED FUNCTION: Get symmetric trios for glyph - ALWAYS VISIBLE ---
     def get_symmetric_trios_for_glyph(self, base_name, master_id):
