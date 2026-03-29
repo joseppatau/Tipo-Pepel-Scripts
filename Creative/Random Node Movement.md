@@ -7,7 +7,7 @@ Randomly offsets selected nodes using a percentage of local segment distances, a
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

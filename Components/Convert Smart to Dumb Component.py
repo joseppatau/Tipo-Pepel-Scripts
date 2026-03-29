@@ -3,7 +3,7 @@
 # Description: Utility script that converts smart components into regular (dumb) components by replacing them with static outlines via a temporary glyph.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 
 
 font = Glyphs.font

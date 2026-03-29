@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Description: Enables or disables automatic alignment of components across all masters for selected glyphs.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
-# License: MIT
+# License: Apache2
 
 from __future__ import division, print_function, unicode_literals
 from GlyphsApp import *

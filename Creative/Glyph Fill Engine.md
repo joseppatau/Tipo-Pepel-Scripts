@@ -7,7 +7,7 @@ Fills glyph shapes with circles or custom glyphs using an adaptive multi-pass di
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 
@@ -72,7 +72,7 @@ MIT
 * Skips glyphs with only components (no paths)
 * Preview creates a temporary layer
 * Uses geometric checks to ensure clean placement
-* Supports both primitive shapes and glyph-based fills
+* Supports both priApache2ive shapes and glyph-based fills
 
 ---
 

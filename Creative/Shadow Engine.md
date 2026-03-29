@@ -7,7 +7,7 @@ Generates shadow shapes by offsetting glyph outlines and subtracting the origina
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

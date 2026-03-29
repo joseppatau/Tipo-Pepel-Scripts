@@ -7,7 +7,7 @@ Fills glyph shapes with scalable, repeatable patterns using custom glyphs, grid 
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

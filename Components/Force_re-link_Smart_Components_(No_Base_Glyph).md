@@ -7,7 +7,7 @@ Fixes disconnected smart components by recreating them across all glyphs and mas
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

@@ -3,11 +3,11 @@
 # Description: Applies equidistant nodes and controlled roughness to glyph outlines for organic distortion effects.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 # Description: Apply equidistant nodes and roughness effects to glyphs
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 
 __doc__ = """
 Apply equidistant nodes and roughness effects to glyphs

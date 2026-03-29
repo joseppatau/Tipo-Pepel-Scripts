@@ -7,7 +7,7 @@ Moves components by a specified X/Y offset across selected masters for selected 
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

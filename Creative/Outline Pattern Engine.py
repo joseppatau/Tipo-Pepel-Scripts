@@ -3,10 +3,10 @@
 # Description: Generates dotted or glyph-based patterns along glyph outlines with adaptive spacing and size control.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 # Description: Create dotted outlines with circles or custom glyphs on glyph contours (OPTIMIZED)
 # Author: Modified based on Glyph Roughness Generator
-# License: MIT
+# License: Apache2
 
 __doc__ = """
 Create dotted outlines with circles or custom glyphs on glyph contours
@@ -419,7 +419,7 @@ def create_dotted_outline(layer, spacing_values, diameter_values, use_glyph=Fals
                 current_pos += spacing
                 spacing_index += 1
                 
-                if spacing_index > 10000:  # Safety limit
+                if spacing_index > 10000:  # Safety liApache2
                     break
             
             # Create elements at each point

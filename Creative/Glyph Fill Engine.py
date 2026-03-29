@@ -3,7 +3,7 @@
 # Description: Fills glyph shapes with circles or custom glyphs using an adaptive multi-pass distribution algorithm.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 from __future__ import division, print_function
 from GlyphsApp import *
 from vanilla import Window, TextBox, EditText, Button, PopUpButton, CheckBox, List
@@ -187,7 +187,7 @@ class FillCirclesTurbo(object):
     
     def show_maxpersize_help(self, sender):
         show_help(
-            "MAX PER SIZE - Limit of same-size shapes per row.\n\n"
+            "MAX PER SIZE - LiApache2 of same-size shapes per row.\n\n"
             "• Low (2-3): Dispersed distribution, avoids clustering\n"
             "• High (6-8): Allows more repetition, denser fill\n"
             "Default: 4\n\n"

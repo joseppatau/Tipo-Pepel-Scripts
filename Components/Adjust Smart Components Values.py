@@ -3,7 +3,7 @@
 # Description: Adjusts smart component axis values for selected glyphs in the current master.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 
 from GlyphsApp import *
 from vanilla import *

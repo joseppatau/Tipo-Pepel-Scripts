@@ -7,7 +7,7 @@ Generates dotted or glyph-based patterns along glyph outlines using adaptive spa
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

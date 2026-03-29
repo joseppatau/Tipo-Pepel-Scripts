@@ -9,7 +9,7 @@ This allows freezing smart component instances for safer editing, export, or com
 Josep Patau Bellart (with AI assistance)
 
 **License**  
-MIT
+Apache2
 
 ---
 

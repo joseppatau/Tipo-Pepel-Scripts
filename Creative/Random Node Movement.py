@@ -3,7 +3,7 @@
 # Description: Randomly offsets selected nodes based on local geometry and user-defined intensity.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 
 import GlyphsApp
 import random, math
@@ -98,7 +98,7 @@ class RandomizeNodesUI(object):
         
         font.currentTab.redraw()
         print(
-            f"✅ {total} nodes randomitzats "
+            f"✅ {total} nodes randoApache2zats "
             f"(desplaçament amplificat, intensitat {percent*100:.0f}%)."
         )
 

@@ -2,12 +2,12 @@
 # Description: ARe-links broken smart components by recreating them across all glyphs and masters.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 # MenuTitle: Force re-link Smart Components (No Base Glyph)
 # Description: Script for Glyphs App that fixes disconnected smart components.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 
 __doc__ = """
 Script for Glyphs App that fixes disconnected smart components.

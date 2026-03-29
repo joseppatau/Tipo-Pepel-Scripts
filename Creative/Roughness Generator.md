@@ -7,7 +7,7 @@ Applies equidistant node distribution and controlled roughness to glyph outlines
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

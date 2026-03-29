@@ -9,7 +9,7 @@ Provides a simple UI to input numeric values for each smart axis and applies the
 Josep Patau Bellart (with AI assistance)
 
 **License**  
-MIT
+Apache2
 
 ---
 

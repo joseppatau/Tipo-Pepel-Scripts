@@ -7,7 +7,7 @@ Enables or disables automatic alignment of components across all masters for sel
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

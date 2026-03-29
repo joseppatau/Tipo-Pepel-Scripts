@@ -3,7 +3,7 @@
 # Description: Fills glyph shapes with scalable and repeatable patterns using custom glyphs and grid-based tiling.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 
 import vanilla
 import math

@@ -7,7 +7,7 @@ Converts components into smart components by generating smart axes and assigning
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 
