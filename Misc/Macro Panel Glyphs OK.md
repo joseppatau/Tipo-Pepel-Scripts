@@ -8,7 +8,7 @@ Allows recording, editing, saving, and replaying sequences of keyboard actions f
 Josep Patau Bellart (with AI assistance)
 
 **License**  
-MIT
+Apache2
 
 ---
 

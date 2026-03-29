@@ -7,7 +7,7 @@ Advanced inspection tool for exploring glyph data, including UUID lookup, charac
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

@@ -9,7 +9,7 @@ Designed for fast QA workflows, especially useful when reviewing different maste
 Josep Patau Bellart (with AI assistance)
 
 **License**  
-MIT
+Apache2
 
 ---
 

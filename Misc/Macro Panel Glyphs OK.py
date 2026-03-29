@@ -3,7 +3,7 @@
 # Description: Advanced macro recorder and shortcut manager for Glyphs App.  
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 __doc__ = """
 Advanced macro recorder and shortcut manager for Glyphs App.  
 Allows recording, editing, saving, and replaying sequences of keyboard actions for repetitive workflows.
