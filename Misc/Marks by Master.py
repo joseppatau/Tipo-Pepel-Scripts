@@ -1,5 +1,9 @@
 # MenuTitle: Marks by Master
 # -*- coding: utf-8 -*-
+# Description: Lightweight color-marking tool for Glyphs App that allows assigning visual status markers to selected glyph layers using native Glyphs color labels.
+# Author: Designed by Josep Patau Bellart, programmed with AI tools
+# If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
+# License: Apache2
 
 from GlyphsApp import Glyphs
 import vanilla
@@ -31,14 +35,14 @@ class MarkRow(object):
         self.callback = callback
         self.colorIndex = colorIndex
 
-        # Nom centrat
+        # Label centrado
         label = vanilla.TextBox((10, y, 90, 18), name)
         label.getNSTextField().setAlignment_(1)
         setattr(parent, f"label_{index}", label)
 
-        # Botó
+        # Botón
         setattr(parent, f"btn_{index}",
-            vanilla.Button((10, y+18, 80, 22), "Mark", callback=self.mark)
+            vanilla.Button((20, y+18, 80, 22), "Mark", callback=self.mark)
         )
         self.button = getattr(parent, f"btn_{index}")
 
@@ -57,17 +61,25 @@ class ReviewMarksUI(object):
 
     def buildUI(self):
 
-        self.w = vanilla.FloatingWindow((100, 220), "Marks")
+        self.w = vanilla.FloatingWindow((120, 280), "Marks")
 
         for name, idx in GLYPHS_COLORS:
             self.addRow(name, idx)
 
-        # 🔥 BOTÓ CLEAN
+        # 🔥 BOTÓN CLEAN
         self.w.cleanButton = vanilla.Button(
-            (10, -30, -10, 22),
+            (10, -80, -10, 22),
             "Clean",
             callback=self.cleanMarks
         )
+
+        # 🔘 RADIO BUTTONS (VERTICAL)
+        self.w.scopeRadio = vanilla.RadioGroup(
+            (10, -50, -10, 40),
+            ["This Master", "All Masters"],
+            isVertical=True
+        )
+        self.w.scopeRadio.set(0)
 
         self.w.open()
 
@@ -82,15 +94,28 @@ class ReviewMarksUI(object):
 
     def resizeWindow(self):
         x, y, w, h = self.w.getPosSize()
-        newHeight = 40 + len(self.rows) * 45
+        newHeight = 100 + len(self.rows) * 45
         self.w.setPosSize((x, y, w, newHeight))
 
     # -------------------------
     # APPLY COLOR
     # -------------------------
     def applyMark(self, colorIndex):
-        for layer in Glyphs.font.selectedLayers:
-            layer.color = colorIndex
+
+        scope = self.w.scopeRadio.get()
+
+        if scope == 0:
+            for layer in Glyphs.font.selectedLayers:
+                layer.color = colorIndex
+        else:
+            font = Glyphs.font
+            selectedGlyphs = [layer.parent for layer in font.selectedLayers]
+
+            for glyph in selectedGlyphs:
+                for master in font.masters:
+                    layer = glyph.layers[master.id]
+                    if layer:
+                        layer.color = colorIndex
 
         print(f"🎨 Applied Glyphs color {colorIndex}")
 
@@ -98,8 +123,21 @@ class ReviewMarksUI(object):
     # CLEAN COLORS
     # -------------------------
     def cleanMarks(self, sender):
-        for layer in Glyphs.font.selectedLayers:
-            layer.color = None
+
+        scope = self.w.scopeRadio.get()
+
+        if scope == 0:
+            for layer in Glyphs.font.selectedLayers:
+                layer.color = None
+        else:
+            font = Glyphs.font
+            selectedGlyphs = [layer.parent for layer in font.selectedLayers]
+
+            for glyph in selectedGlyphs:
+                for master in font.masters:
+                    layer = glyph.layers[master.id]
+                    if layer:
+                        layer.color = None
 
         print("🧹 Colors cleared")
 
