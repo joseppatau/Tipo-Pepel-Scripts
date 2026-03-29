@@ -127,7 +127,7 @@ If you are interested in a bespoke type solution, feel free to get in touch.
 
 ## License
 
-MIT
+Apache2
 
 ---
 
