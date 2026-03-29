@@ -1,9 +1,9 @@
-# MenuTitle:Delimit Zones
+# MenuTitle:DeliApache2 Zones
 # -*- coding: utf-8 -*-
 # Description: Creates and manages horizontal zones with visual overlays and node-edge highlighting for precise vertical control.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 
 from GlyphsApp import *
 from AppKit import *
@@ -390,7 +390,7 @@ def find_circumflexcomb_glyph(self):
     return glyph
 
 def get_glyph_bounds(self, glyph, master_id=None):
-    """Obtener los límites de un glifo en un master específico"""
+    """Obtener los líApache2es de un glifo en un master específico"""
     try:
         if not glyph:
             return None
@@ -418,7 +418,7 @@ def get_glyph_bounds(self, glyph, master_id=None):
             print(f"No se encontró layer para master {master_id}, usando el primero")
             target_layer = glyph.layers[0]
         
-        # Obtener los límites del trazado
+        # Obtener los líApache2es del trazado
         bounds = target_layer.bounds
         print(f"Bounds del glifo {glyph.name}: y={bounds.origin.y}, height={bounds.size.height}")
         
@@ -443,16 +443,16 @@ def create_diacritics_zone_auto(self):
         print("No se encontró circumflexcomb, no se creará zona diacritics automática")
         return
     
-    # Obtener los límites del glifo
+    # Obtener los líApache2es del glifo
     bounds = self.get_glyph_bounds(glyph)
     if not bounds:
-        print("No se pudieron obtener límites de circumflexcomb")
+        print("No se pudieron obtener líApache2es de circumflexcomb")
         return
     
     y_min = bounds.origin.y
     y_max = bounds.origin.y + bounds.size.height
     
-    print(f"Límites del circumflexcomb: min_y={y_min}, max_y={y_max}")
+    print(f"LíApache2es del circumflexcomb: min_y={y_min}, max_y={y_max}")
     
     # Crear la zona diacritics
     self.zones.append(
@@ -467,7 +467,7 @@ def create_diacritics_zone_auto(self):
         Glyphs.redraw()
 
 def get_selected_nodes_bounds(self, layer):
-    """Obtener los límites Y de los nodos seleccionados"""
+    """Obtener los líApache2es Y de los nodos seleccionados"""
     min_y = None
     max_y = None
     
@@ -508,7 +508,7 @@ def get_selected_nodes_bounds(self, layer):
     return min_y, max_y
 
 def get_component_bounds(self, component):
-    """Obtener los límites de un componente en el contexto actual"""
+    """Obtener los líApache2es de un componente en el contexto actual"""
     try:
         # Obtener el glifo maestro
         master_glyph = component.component
@@ -571,14 +571,14 @@ def acote_selected_zone(self, sender):
         print("No hay elementos seleccionados en el layer")
         return
     
-    # Obtener límites Y de los elementos seleccionados
+    # Obtener líApache2es Y de los elementos seleccionados
     min_y, max_y = self.get_selected_nodes_bounds(layer)
     
     if min_y is None or max_y is None:
-        print("No se pudieron determinar los límites de la selección")
+        print("No se pudieron determinar los líApache2es de la selección")
         return
     
-    print(f"Límites encontrados: min_y={min_y}, max_y={max_y}")
+    print(f"LíApache2es encontrados: min_y={min_y}, max_y={max_y}")
     
     # Contar zonas existentes con nombre "Selected"
     selected_count = sum(1 for z in self.zones if z.name.startswith("Selected"))

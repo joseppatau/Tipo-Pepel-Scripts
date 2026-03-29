@@ -7,7 +7,7 @@ Creates and manages horizontal measurement guides at specified Y positions, with
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

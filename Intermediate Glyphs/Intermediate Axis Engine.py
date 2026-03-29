@@ -3,10 +3,10 @@
 # Description: Creates and manages intermediate layers using axis-based coordinates with continuous interpolation and preview support.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: MIT
+# License: Apache2
 # Description: Preview and create intermediate glyphs with continuous weight blending
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
-# License: MIT
+# License: Apache2
 
 from GlyphsApp import *
 from vanilla import *

@@ -7,7 +7,7 @@ Removes all global and glyph-level guides across all masters in the font in a si
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

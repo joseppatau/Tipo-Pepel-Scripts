@@ -7,7 +7,7 @@ Creates and manages intermediate layers using axis-based coordinates, with conti
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 

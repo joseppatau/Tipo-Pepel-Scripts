@@ -1,4 +1,4 @@
-## Delimit Zones
+## DeliApache2 Zones
 
 **Description**
 Interactive tool to create, visualize, and manage horizontal zones in glyphs, with live drawing overlays and node-edge highlighting for precise vertical control.
@@ -7,7 +7,7 @@ Interactive tool to create, visualize, and manage horizontal zones in glyphs, wi
 Josep Patau Bellart (with AI assistance)
 
 **License**
-MIT
+Apache2
 
 ---
 
