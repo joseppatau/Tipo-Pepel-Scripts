@@ -1,55 +1,125 @@
 # MenuTitle: Move elements in masters
 # -*- coding: utf-8 -*-
-# Description: Moves nodes, components, or both across current or all masters using a directional UI.
-# Author: Designed by Josep Patau Bellart, programmed with AI tools
-# If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: Apache2
 
 from GlyphsApp import *
 from vanilla import *
 from AppKit import NSModalPanelWindowLevel
 
+
 class MoveElementsClean(object):
 
     def __init__(self):
 
-        self.w = Window((300, 200), "Move elements")
+        self.font = Glyphs.font
+        self.w = Window((320, 740), "Move elements")
+
+        # PM / NM
+        self.w.prevMaster = Button((-60, 5, 25, 14), "PM", callback=self.prevMaster)
+        self.w.nextMaster = Button((-30, 5, 25, 14), "NM", callback=self.nextMaster)
 
         # Arrows
-        self.w.up = Button((130, 10, 40, 24), "↑", callback=lambda s: self.move(0, 1))
-        self.w.down = Button((130, 80, 40, 24), "↓", callback=lambda s: self.move(0, -1))
-        self.w.left = Button((70, 45, 40, 24), "←", callback=lambda s: self.move(-1, 0))
-        self.w.right = Button((186, 45, 40, 24), "→", callback=lambda s: self.move(1, 0))
+        self.w.up = Button((140, 10, 40, 24), "↑", callback=lambda s: self.move(0, 1))
+        self.w.down = Button((140, 80, 40, 24), "↓", callback=lambda s: self.move(0, -1))
+        self.w.left = Button((80, 45, 40, 24), "←", callback=lambda s: self.move(-1, 0))
+        self.w.right = Button((200, 45, 40, 24), "→", callback=lambda s: self.move(1, 0))
 
-        self.w.value = EditText((124, 48, 50, 22), "10")
-
+        self.w.value = EditText((134, 48, 50, 22), "10")
 
         # WHAT
         self.w.what = RadioGroup(
-            (15, 120, 220, 60),
-            ["Paths (Nodes)",
-             "Components",
-             "Both"],
+            (15, 120, 150, 60),
+            ["Paths (Nodes)", "Components", "Both"],
             isVertical=True
         )
         self.w.what.set(0)
 
         # WHERE
         self.w.where = RadioGroup(
-            (135, 120, 220, 40),
-            ["Current Master Only",
-             "All Masters"],
+            (170, 120, 140, 40),
+            ["Current Master Only", "Selected Masters"],
             isVertical=True
         )
         self.w.where.set(1)
 
-        # Make window float above Glyphs main window
+        # MASTER CHECKBOXES
+        self.masterChecks = []
+        yStart = 190
+
+        for i, master in enumerate(self.font.masters):
+            cb = CheckBox((15, yStart + i * 20, -10, 20), master.name, value=True)
+            setattr(self.w, f"master_{i}", cb)
+            self.masterChecks.append(cb)
+
+        # Toggle button
+        self.w.toggleAll = Button(
+            (15, yStart + len(self.font.masters) * 20 + 15, 120, 18),
+            "Deselect All",
+            callback=self.toggleMasters
+        )
+
+        # Always on top
         self.w.getNSWindow().setLevel_(NSModalPanelWindowLevel)
-        
+
         self.w.open()
+        self.w.makeKey()
 
-    # -------------------------------------------------
+    # -------------------------
+    # MASTER NAVIGATION
+    # -------------------------
+    def nextMaster(self, sender):
+        font = Glyphs.font
+        if not font or not font.currentTab:
+            return
+        tab = font.currentTab
+        tab.masterIndex = (tab.masterIndex + 1) % len(font.masters)
 
+    def prevMaster(self, sender):
+        font = Glyphs.font
+        if not font or not font.currentTab:
+            return
+        tab = font.currentTab
+        tab.masterIndex = (tab.masterIndex - 1) % len(font.masters)
+
+    # -------------------------
+    # TOGGLE ALL
+    # -------------------------
+    def toggleMasters(self, sender):
+
+        allSelected = all(cb.get() for cb in self.masterChecks)
+        newState = not allSelected
+
+        for cb in self.masterChecks:
+            cb.set(newState)
+
+        if newState:
+            self.w.toggleAll.setTitle("Deselect All")
+        else:
+            self.w.toggleAll.setTitle("Select All")
+
+    # -------------------------
+    # TARGET LAYERS
+    # -------------------------
+    def getTargetLayers(self, glyph, currentLayer):
+
+        if self.w.where.get() == 0:
+            return [currentLayer]
+
+        selectedMasters = [
+            m for i, m in enumerate(self.font.masters)
+            if self.masterChecks[i].get()
+        ]
+
+        layers = []
+        for m in selectedMasters:
+            layer = glyph.layers[m.id]
+            if layer:
+                layers.append(layer)
+
+        return layers
+
+    # -------------------------
+    # MOVE (FINAL FIX)
+    # -------------------------
     def move(self, xDir, yDir):
 
         font = Glyphs.font
@@ -66,7 +136,6 @@ class MoveElementsClean(object):
         dy = yDir * value
 
         mode = self.w.what.get()
-        affectAll = self.w.where.get() == 1
 
         undoManager = font.undoManager()
         undoManager.beginUndoGrouping()
@@ -74,67 +143,88 @@ class MoveElementsClean(object):
 
         for layer in font.selectedLayers:
             glyph = layer.parent
+            targetLayers = self.getTargetLayers(glyph, layer)
 
-            # Layers to affect
-            if affectAll:
-                targetLayers = [glyph.layers[m.id] for m in font.masters]
-            else:
-                targetLayers = [layer]
-
-            # =========================
-            # MOVE PATHS (nodes)
-            # =========================
+            # ===== PATHS =====
             if mode in (0, 2):
 
                 for pIndex, path in enumerate(layer.paths):
 
                     moveWholePath = path.selected
-                    selectedNodeIndexes = [
-                        nIndex for nIndex, n in enumerate(path.nodes)
-                        if n.selected
-                    ]
+                    selectedNodeIndexes = [i for i, n in enumerate(path.nodes) if n.selected]
 
                     if not moveWholePath and not selectedNodeIndexes:
                         continue
 
                     for target in targetLayers:
                         try:
-                            targetPath = target.paths[pIndex]
-                        except IndexError:
+                            tPath = target.paths[pIndex]
+                        except:
                             continue
 
-                        # Move whole path
+                        nodes = tPath.nodes
+
                         if moveWholePath:
-                            for node in targetPath.nodes:
-                                node.x += dx
-                                node.y += dy
+                            for n in nodes:
+                                n.x += dx
+                                n.y += dy
+                            continue
 
-                        # Move individual nodes
-                        else:
-                            for nIndex in selectedNodeIndexes:
-                                try:
-                                    node = targetPath.nodes[nIndex]
-                                    node.x += dx
-                                    node.y += dy
-                                except IndexError:
-                                    continue
+                        nodesToMove = set()
 
-            # =========================
-            # MOVE COMPONENTS
-            # =========================
+                        for i in selectedNodeIndexes:
+                            if i >= len(nodes):
+                                continue
+
+                            node = nodes[i]
+                            nodesToMove.add(node)
+
+                            if node.type != OFFCURVE:
+
+                                j = i - 1
+                                while j >= 0 and nodes[j].type == OFFCURVE:
+                                    nodesToMove.add(nodes[j])
+                                    j -= 1
+
+                                j = i + 1
+                                while j < len(nodes) and nodes[j].type == OFFCURVE:
+                                    nodesToMove.add(nodes[j])
+                                    j += 1
+
+                        for n in nodesToMove:
+                            n.x += dx
+                            n.y += dy
+
+            # ===== COMPONENTS =====
             if mode in (1, 2):
 
-                for cIndex, component in enumerate(layer.components):
+                for cIndex, comp in enumerate(layer.components):
 
-                    if not component.selected:
+                    if not comp.selected:
                         continue
 
                     for target in targetLayers:
                         try:
-                            masterComponent = target.components[cIndex]
-                            masterComponent.x += dx
-                            masterComponent.y += dy
-                        except IndexError:
+                            tComp = target.components[cIndex]
+                            tComp.x += dx
+                            tComp.y += dy
+                        except:
+                            continue
+
+            # ===== ANCHORS =====
+            if mode == 2:
+
+                for aIndex, anchor in enumerate(layer.anchors):
+
+                    if not anchor.selected:
+                        continue
+
+                    for target in targetLayers:
+                        try:
+                            tAnchor = target.anchors[aIndex]
+                            tAnchor.x += dx
+                            tAnchor.y += dy
+                        except:
                             continue
 
         font.enableUpdateInterface()
