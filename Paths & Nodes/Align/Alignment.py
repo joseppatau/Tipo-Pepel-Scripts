@@ -1,15 +1,13 @@
-# MenuTitle: Alignment (FINAL clean background)
+# MenuTitle: Alignment (FINAL TRUE WIDTH PRO)
 # -*- coding: utf-8 -*-
-# Description: Aligns components horizontally using a true italic-aware projection method.
-# Author: Designed by Josep Patau Bellart, programmed with AI tools
-# If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: Apache2
 
 import vanilla
 from GlyphsApp import Glyphs
 import math
+import traceback
 
 DEBUG = True
+
 
 def log(msg):
     if DEBUG:
@@ -19,24 +17,32 @@ def log(msg):
 class AlignTool(object):
 
     def __init__(self):
-        self.w = vanilla.FloatingWindow((160, 300), "Alignment")
-        
-        self.w.labelX = vanilla.TextBox((15, 10, -15, 20), "X —")
+        self.w = vanilla.FloatingWindow((240, 360), "Alignment PRO")
+
         self.w.options = vanilla.RadioGroup(
-            (45, 10, -15, 150),
-            ["Up", "Center", "Down", "Left", "Center", "Right"]
+            (45, 10, -15, 140),
+            ["Up", "Center Y", "Down", "Left", "Center X", "Right"]
         )
-        self.w.labelY = vanilla.TextBox((15, 70, -15, 20), "Y |")
         self.w.options.set(4)
         
+        self.w.labelY = vanilla.TextBox((17, 80, -15, 20), "Y |")
+        self.w.labelX = vanilla.TextBox((15, 10, -15, 20), "X —")
+        self.w.options.set(0)
+
         self.w.alignButton = vanilla.Button(
-            (15, 180, -15, 25),
-            "Align Paths",
+            (15, 170, -15, 30),
+            "Align",
             callback=self.align
         )
-        
+
+        self.w.trueWidth = vanilla.CheckBox(
+            (15, 210, -15, 20),
+            "Align to width",
+            value=False
+        )
+
         self.w.scope = vanilla.RadioGroup(
-            (15, 220, -15, 40),
+            (15, 240, -15, 40),
             ["Current", "All masters"]
         )
         self.w.scope.set(0)
@@ -45,203 +51,260 @@ class AlignTool(object):
 
     # ========= ITALIC =========
 
-    def deitalicize(self, x, y, angle):
-        return x - y * math.tan(math.radians(angle)) if angle else x
+    def getItalicAngle(self, layer):
+        font = Glyphs.font
+        master = font.masters[layer.associatedMasterId]
+        angle = master.italicAngle or 0
+        log(f"Italic angle: {angle}")
+        return angle
 
-    # ========= INTERSECTIONS =========
+    # ========= SELECTION =========
 
-    def centerFromPaths(self, paths, angle, y_target):
-        xs = []
+    def getItems(self, layer):
+        paths = [p for p in layer.paths if p.selected]
+        comps = [c for c in layer.components if c.selected]
 
-        for path in paths:
-            nodes = path.nodes
-            if not nodes:
-                continue
+        log(f"Paths selected: {len(paths)}")
+        log(f"Components selected: {len(comps)}")
 
-            for i in range(len(nodes)):
-                n1 = nodes[i]
-                n2 = nodes[(i + 1) % len(nodes)]
+        items = paths + comps
 
-                if (n1.y <= y_target <= n2.y) or (n2.y <= y_target <= n1.y):
-                    if n1.y == n2.y:
-                        continue
+        if not items:
+            log("No selection → using all items")
+            items = list(layer.paths) + list(layer.components)
 
-                    t = (y_target - n1.y) / (n2.y - n1.y)
-                    x = n1.x + t * (n2.x - n1.x)
+        log(f"Total items used: {len(items)}")
+        return items
 
-                    xs.append(self.deitalicize(x, y_target, angle))
+    # ========= GET ALL NODES (KEY) =========
 
-        log(f"  intersections @Y {y_target}: {len(xs)}")
+    def getAllNodes(self, layer):
 
-        if len(xs) < 2:
-            return None
+        nodes = []
 
-        center = (min(xs) + max(xs)) / 2
-        log(f"  center: {center}")
-        return center
+        # paths
+        for p in layer.paths:
+            nodes.extend(p.nodes)
 
-    # ========= GLOBAL FALLBACK =========
-
-    def globalCenter(self, paths, angle):
-        xs = []
-
-        for p in paths:
-            for n in p.nodes:
-                xs.append(self.deitalicize(n.x, n.y, angle))
-
-        if not xs:
-            return None
-
-        return (min(xs) + max(xs)) / 2
-
-    # ========= GROUPS (SAFE BACKGROUND) =========
-
-    def getGroups(self, layer):
-        groups = []
+        # components → descomponer
         bg = layer.background
+        orig_paths = [p.copy() for p in bg.paths]
+        orig_comps = [c.copy() for c in bg.components]
 
-        # 🔥 guardar estat original
-        original_paths = [p.copy() for p in bg.paths]
-        original_components = [c.copy() for c in bg.components]
-
-        for comp in layer.components:
+        for c in layer.components:
             bg.clear()
-            bg.components.append(comp.copy())
+            bg.components.append(c.copy())
             bg.decomposeComponents()
 
-            paths = list(bg.paths)
+            for p in bg.paths:
+                nodes.extend(p.nodes)
 
-            log(f"component → {len(paths)} paths")
-
-            if paths:
-                groups.append((comp, paths))
-
-        # 🔥 restaurar background
+        # restore
         bg.clear()
-        for p in original_paths:
+        for p in orig_paths:
             bg.paths.append(p)
-        for c in original_components:
+        for c in orig_comps:
             bg.components.append(c)
 
-        return groups
+        log(f"Total nodes collected: {len(nodes)}")
+        return nodes
+
+    # ========= BOUNDS (ITALIC-AWARE) =========
+
+    def getBounds(self, layer, item):
+
+        angle = self.getItalicAngle(layer)
+        tan_angle = math.tan(math.radians(angle))
+
+        xs, ys = [], []
+
+        if hasattr(item, "nodes"):
+            for n in item.nodes:
+                xs.append(n.x - (n.y * tan_angle))
+                ys.append(n.y)
+        else:
+            bg = layer.background
+
+            orig_paths = [p.copy() for p in bg.paths]
+            orig_comps = [c.copy() for c in bg.components]
+
+            bg.clear()
+            bg.components.append(item.copy())
+            bg.decomposeComponents()
+
+            for p in bg.paths:
+                for n in p.nodes:
+                    xs.append(n.x - (n.y * tan_angle))
+                    ys.append(n.y)
+
+            bg.clear()
+            for p in orig_paths:
+                bg.paths.append(p)
+            for c in orig_comps:
+                bg.components.append(c)
+
+        if not xs:
+            return 0, 0, 0, 0
+
+        bounds = (min(xs), min(ys), max(xs), max(ys))
+        log(f"Bounds: {bounds}")
+        return bounds
+
+    # ========= GLOBAL REFERENCE =========
+
+    def getReference(self, layer, items, option):
+
+        bounds_list = [self.getBounds(layer, i) for i in items]
+
+        minX = min(b[0] for b in bounds_list)
+        minY = min(b[1] for b in bounds_list)
+        maxX = max(b[2] for b in bounds_list)
+        maxY = max(b[3] for b in bounds_list)
+
+        log(f"GLOBAL bounds: {(minX, minY, maxX, maxY)}")
+
+        if option == 0:
+            ref = maxY
+        elif option == 1:
+            ref = (minY + maxY) / 2
+        elif option == 2:
+            ref = minY
+        elif option == 3:
+            ref = minX
+        elif option == 4:
+            ref = (minX + maxX) / 2
+        elif option == 5:
+            ref = maxX
+
+        log(f"REFERENCE: {ref:.2f}")
+        return ref
+
+    # ========= MOVE =========
+
+    def moveItem(self, layer, item, option, ref):
+
+        minX, minY, maxX, maxY = self.getBounds(layer, item)
+
+        dx = dy = 0
+
+        if option == 0:
+            dy = ref - maxY
+        elif option == 1:
+            dy = ref - ((minY + maxY) / 2)
+        elif option == 2:
+            dy = ref - minY
+        elif option == 3:
+            dx = ref - minX
+        elif option == 4:
+            dx = ref - ((minX + maxX) / 2)
+        elif option == 5:
+            dx = ref - maxX
+
+        log(f"MOVE → dx={dx:.2f}, dy={dy:.2f}")
+
+        if hasattr(item, "nodes"):
+            for n in item.nodes:
+                n.x += dx
+                n.y += dy
+        else:
+            item.applyTransform((1, 0, 0, 1, dx, dy))
+
+    # ========= TRUE WIDTH (YOUR METHOD) =========
+
+    def applyTrueWidth(self, layer):
+
+        try:
+            nodes = self.getAllNodes(layer)
+
+            if not nodes:
+                log("No nodes → abort")
+                return
+
+            angle = self.getItalicAngle(layer)
+            tan_angle = math.tan(math.radians(angle))
+
+            projected = [n.x - (n.y * tan_angle) for n in nodes]
+
+            left = min(projected)
+            right = max(projected)
+
+            log(f"Projected left: {left:.2f}")
+            log(f"Projected right: {right:.2f}")
+
+            overflow_right = max(0, right - layer.width)
+
+            log(f"Overflow right: {overflow_right:.2f}")
+
+            path_width = (right - left) + overflow_right
+
+            log(f"Path width: {path_width:.2f}")
+            log(f"Glyph width: {layer.width}")
+
+            margin = layer.width - path_width
+            side = margin / 2
+
+            new_lsb = side
+            new_rsb = side
+
+            log(f"New LSB: {new_lsb:.2f}")
+            log(f"New RSB: {new_rsb:.2f}")
+
+            layer.LSB = new_lsb
+            layer.RSB = new_rsb
+
+            log("✅ TRUE WIDTH CENTER APPLIED")
+
+        except:
+            traceback.print_exc()
 
     # ========= ALIGN =========
 
     def alignLayer(self, layer):
-        angle = layer.master.italicAngle or 0
 
         log("\n========================")
-        log(f"Layer: {layer.name} | angle: {angle}")
+        log(f"LAYER: {layer.name}")
 
-        groups = self.getGroups(layer)
+        items = self.getItems(layer)
+        option = self.w.options.get()
 
-        if len(groups) < 2:
-            log("❌ not enough groups")
+        log(f"OPTION: {option}")
+
+        if self.w.trueWidth.get() and option == 4:
+            log("MODE: TRUE WIDTH CENTER")
+            self.applyTrueWidth(layer)
             return
 
-        sized = []
+        ref = self.getReference(layer, items, option)
 
-        for comp, paths in groups:
-            xs, ys = [], []
-
-            for p in paths:
-                if not p.nodes:
-                    continue
-                xs.extend([n.x for n in p.nodes])
-                ys.extend([n.y for n in p.nodes])
-
-            if not xs or not ys:
-                continue
-
-            size = (max(xs)-min(xs)) * (max(ys)-min(ys))
-            sized.append((size, comp, paths))
-
-        if len(sized) < 2:
-            log("❌ not enough sized elements")
-            return
-
-        sized.sort(reverse=True, key=lambda x: x[0])
-
-        ref_comp, ref_paths = sized[0][1], sized[0][2]
-        target_comp, target_paths = sized[1][1], sized[1][2]
-
-        log(f"REF size: {sized[0][0]}")
-        log(f"TGT size: {sized[1][0]}")
-
-        # ========= MULTI-SAMPLING =========
-
-        ys = []
-        for p in target_paths:
-            ys.extend([n.y for n in p.nodes])
-
-        if not ys:
-            log("❌ no Y values")
-            return
-
-        y_values = [
-            min(ys),
-            (min(ys) + max(ys)) / 2,
-            max(ys)
-        ]
-
-        ref_centers = []
-        cur_centers = []
-
-        for y in y_values:
-            log(f"\nSampling Y = {y}")
-
-            ref_c = self.centerFromPaths(ref_paths, angle, y)
-            cur_c = self.centerFromPaths(target_paths, angle, y)
-
-            if ref_c is not None and cur_c is not None:
-                ref_centers.append(ref_c)
-                cur_centers.append(cur_c)
-
-        # ========= FALLBACK =========
-
-        if not ref_centers:
-            log("⚠️ using GLOBAL fallback")
-
-            ref_center = self.globalCenter(ref_paths, angle)
-            cur_center = self.globalCenter(target_paths, angle)
-
-        else:
-            ref_center = sum(ref_centers) / len(ref_centers)
-            cur_center = sum(cur_centers) / len(cur_centers)
-
-        dx = round(ref_center - cur_center, 2)
-        log(f"DX: {dx}")
-
-        if abs(dx) < 0.01:
-            log("⚠️ dx too small")
-            return
-
-        before = target_comp.x
-        target_comp.applyTransform((1, 0, 0, 1, dx, 0))
-        after = target_comp.x
-
-        log(f"Moved: {before} → {after}")
+        for item in items:
+            self.moveItem(layer, item, option, ref)
 
     # ========= MAIN =========
 
     def align(self, sender):
+
+        log("\n🟢 RUN ALIGN")
+
         font = Glyphs.font
+
         if not font.selectedLayers:
+            log("No layers selected")
             return
 
         font.disableUpdateInterface()
 
-        for layer in font.selectedLayers:
-            glyph = layer.parent
+        try:
+            for layer in font.selectedLayers:
+                glyph = layer.parent
 
-            if self.w.scope.get() == 0:
-                self.alignLayer(layer)
-            else:
-                for l in glyph.layers:
-                    if l.isMasterLayer or l.isSpecialLayer:
-                        self.alignLayer(l)
-
-        font.enableUpdateInterface()
+                if self.w.scope.get() == 0:
+                    self.alignLayer(layer)
+                else:
+                    for l in glyph.layers:
+                        if l.isMasterLayer or l.isSpecialLayer:
+                            self.alignLayer(l)
+        finally:
+            font.enableUpdateInterface()
 
 
 AlignTool()

@@ -1,8 +1,10 @@
 ## Alignment (Italic Projection Method)
 
-**Description**
-Aligns components horizontally using a true italic-aware projection method.
-Instead of relying on bounding boxes, it computes alignment based on geometric intersections and fallback projection, ensuring visually correct results in italic masters.
+**Description**  
+Advanced alignment tool for Glyphs using an italic-aware projection method.  
+Instead of relying on unreliable bounding boxes, it computes alignment using real node geometry, ensuring visually correct results in both roman and italic masters.
+
+Supports multiple alignment modes including global alignment, true width centering, and individual element centering.
 
 **Author**
 Josep Patau Bellart (with AI assistance)
@@ -38,6 +40,33 @@ Apache2
 ```
 x' = x - y * tan(angle)
 ```
+
+---
+
+### Core Alignment
+
+* True alignment in italic masters (no bounding box errors)
+* Uses geometric projection (italic-aware)
+* Works with paths and components simultaneously
+* Global alignment using real geometry (not averaged centers)
+* Supports all directions:
+  * Up
+  * Center Y
+  * Down
+  * Left
+  * Center X
+  * Right
+
+---
+
+### True Width Mode
+
+Centers the glyph based on the **actual drawn width**, not bounding boxes.
+
+* Detects overflow outside glyph width
+* Uses projected coordinates for accuracy in italic
+* Assigns **LSB and RSB directly**
+* Matches professional spacing workflow
 
 ---
 
