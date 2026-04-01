@@ -4,7 +4,7 @@
 Copies kerning data from other open fonts into the current font, with flexible selection of masters and matching logic based on master name or ID.
 
 **Author**  
-Your Name (with AI assistance)
+Josep Patau Bellart (with AI assistance)
 
 **License**  
 Apache2
