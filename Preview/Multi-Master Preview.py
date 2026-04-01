@@ -1,14 +1,20 @@
-# MenuTitle: Multi-Master Preview
-# -*- coding: utf-8 -*-
-# Description: Displays the current glyph across all masters side by side for visual comparison.
-# Author: Designed by Josep Patau Bellart, programmed with AI tools
-# If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: Apache2
+# MenuTitle: Preview Glyph in all masters
+# Josep Patau Bellart (improved stability version)
 
 from GlyphsApp import *
 from vanilla import *
 from AppKit import *
 import objc
+
+# Función de debug (opcional, puedes comentar las líneas de debug si no las necesitas)
+def debug_print(*args):
+    pass  # Comenta esta línea y descomenta la siguiente para ver debug
+    # try:
+    #     message = " ".join(str(arg) for arg in args)
+    #     Glyphs.showMacroWindow()
+    #     print(message)
+    # except:
+    #     pass
 
 
 if 'SimpleGlyphPreviewView' not in globals():
@@ -23,17 +29,19 @@ if 'SimpleGlyphPreviewView' not in globals():
 
             self.glyph_name = None
             self.metrics_list = []
-            self.zoom = 0.5
+            self.zoom = 1.0
             self._layout = None
 
             self.on_double_click = None
             self.parent_panel = None
 
             self.is_dragging = False
-            self.drag_start_x = 0
             self.drag_start_y = 0
+            self.initial_scroll_y = 0
 
             self.space_pressed = False
+            
+            self.setAcceptsTouchEvents_(True)
 
             return self
 
@@ -104,10 +112,9 @@ if 'SimpleGlyphPreviewView' not in globals():
             if not glyph:
                 return []
 
-            height = 600   # ALTURA FIJA (evita zoom fantasma)
+            height = 600
 
             x = 40
-            padding = 30
 
             layout = []
 
@@ -193,10 +200,10 @@ if 'SimpleGlyphPreviewView' not in globals():
             zoom_factor = 1.1 if delta > 0 else 0.9
 
             new_zoom = self.zoom * zoom_factor
-            new_zoom = max(0.5, min(3.0, new_zoom))
+            new_zoom = max(0.1, min(5.0, new_zoom))
 
             if self.parent_panel:
-                slider_value = (new_zoom - 0.5) / 2.5
+                slider_value = (new_zoom - 0.1) / 4.9
                 self.parent_panel.w.zoom.set(slider_value)
 
             self.setZoom_(new_zoom)
@@ -205,73 +212,106 @@ if 'SimpleGlyphPreviewView' not in globals():
                 self.parent_panel.updateContentSize()
 
 
+        def acceptsFirstResponder(self):
+            return True
+
+
+        def becomeFirstResponder(self):
+            return True
+
+
+        def keyDown_(self, event):
+            if event.characters() == " ":
+                self.space_pressed = True
+                NSCursor.openHandCursor().set()
+
+
+        def keyUp_(self, event):
+            if event.characters() == " ":
+                self.space_pressed = False
+                NSCursor.arrowCursor().set()
+
+
         def mouseDown_(self, event):
-
+            
+            # Doble click para abrir glifo
             if event.clickCount() == 2:
-
                 point = self.convertPoint_fromView_(event.locationInWindow(), None)
 
                 if not self._layout:
                     return
 
                 for item in self._layout:
-
                     if NSPointInRect(point, item["rect"]):
-
                         if self.on_double_click:
                             self.on_double_click(item["glyph"], item["masterID"])
-
                         return
 
-            if NSEvent.modifierFlags() & NSEventModifierFlagOption or self.space_pressed:
-
+            # Verificar si se debe iniciar drag (Option key o space)
+            option_pressed = (event.modifierFlags() & NSEventModifierFlagOption) != 0
+            
+            if option_pressed or self.space_pressed:
                 self.is_dragging = True
-                self.drag_start_x = event.locationInWindow().x
                 self.drag_start_y = event.locationInWindow().y
+                
+                # Guardar la posición inicial del scroll Y
+                scroll_view = self._getScrollView()
+                if scroll_view:
+                    clip_view = scroll_view.contentView()
+                    current_bounds = clip_view.bounds()
+                    self.initial_scroll_y = current_bounds.origin.y
+                
                 NSCursor.closedHandCursor().set()
+            else:
+                # Pasar el evento al scroll view para scroll normal
+                next_responder = self.nextResponder()
+                if next_responder:
+                    next_responder.mouseDown_(event)
+
+
+        def _getScrollView(self):
+            """Helper para obtener el scroll view"""
+            view = self.superview()
+            while view:
+                if hasattr(view, 'documentView'):
+                    return view
+                view = view.superview()
+            return None
 
 
         def mouseDragged_(self, event):
-
+            
             if not self.is_dragging:
                 return
 
-            scroll_view = None
-            view = self.superview()
-
-            while view and not scroll_view:
-                if hasattr(view, 'documentView'):
-                    scroll_view = view
-                    break
-                view = view.superview()
+            scroll_view = self._getScrollView()
 
             if not scroll_view:
                 return
 
-            current_x = event.locationInWindow().x
             current_y = event.locationInWindow().y
-
-            delta_x = self.drag_start_x - current_x
             delta_y = self.drag_start_y - current_y
 
             clip_view = scroll_view.contentView()
-            current_bounds = clip_view.bounds()
+            
+            # Solo modificar la posición Y, mantener X en 0
+            new_y = self.initial_scroll_y + delta_y
+            
+            # Limitar el scroll para que no se salga de los límites
+            max_y = self.bounds().size.height - clip_view.bounds().size.height
+            new_y = max(0, min(max_y, new_y))
 
-            new_x = current_bounds.origin.x + delta_x
-            new_y = current_bounds.origin.y + delta_y
-
-            clip_view.scrollToPoint_(NSMakePoint(new_x, new_y))
+            clip_view.scrollToPoint_(NSMakePoint(0, new_y))
             scroll_view.reflectScrolledClipView_(clip_view)
-
-            self.drag_start_x = current_x
-            self.drag_start_y = current_y
 
 
         def mouseUp_(self, event):
-
             self.is_dragging = False
             NSCursor.arrowCursor().set()
 
+
+        def resetCursorRects(self):
+            self.addCursorRect_(self.bounds(), NSCursor.arrowCursor())
 
 
 class NSViewWrapper(VanillaBaseObject):
@@ -295,9 +335,10 @@ class SimpleGlyphPreviewPanel(object):
         if not self.font:
             Message("No Font Open", "Open a font first")
             return
+        
+        self.w = Window((1840,650), "Glyph Preview")
 
-        self.w = Window((1900,650), "Glyph Preview")
-
+        # Slider de zoom
         self.w.zoom = Slider(
             (20,10,680,20),
             value=0.0,
@@ -306,8 +347,23 @@ class SimpleGlyphPreviewPanel(object):
             callback=self.zoom
         )
 
+        # Botón de zoom out (-)
+        self.w.zoom_out = Button(
+            (710, 8, 30, 23),
+            "-",
+            callback=self.zoomOut
+        )
+
+        # Botón de zoom in (+)
+        self.w.zoom_in = Button(
+            (745, 8, 30, 23),
+            "+",
+            callback=self.zoomIn
+        )
+
+        # Botón reset view
         self.w.reset_button = Button(
-            (720, 8, 160, 23),
+            (785, 8, 95, 23),
             "Reset View",
             callback=self.resetView
         )
@@ -315,55 +371,109 @@ class SimpleGlyphPreviewPanel(object):
         height = 560
 
         self.scroll = NSScrollView.alloc().initWithFrame_(((0,0),(860,height)))
-
         self.scroll.setHasHorizontalScroller_(True)
         self.scroll.setHasVerticalScroller_(True)
+        self.scroll.setDrawsBackground_(False)
+        self.scroll.setBorderType_(NSNoBorder)
 
         self.view = SimpleGlyphPreviewView.alloc().initWithFrame_(((0,0),(2000, height)))
-
         self.view.setDoubleClickCallback_(self.openGlyph)
         self.view.setParentPanel_(self)
 
         self.scroll.setDocumentView_(self.view)
 
-        self.w.preview = NSViewWrapper((20,60,1860,height), self.scroll)
+        self.w.preview = NSViewWrapper((20,60,1800,height), self.scroll)
 
         Glyphs.addCallback(self.liveUpdate, UPDATEINTERFACE)
 
         self.updateMetrics()
         self.liveUpdate()
+        
+        # Ajustar zoom inicial para mostrar todo el contenido
+        self.autoFitContent()
 
         self.w.open()
+        
+        # Hacer que la vista reciba eventos
+        self.w.getNSWindow().makeFirstResponder_(self.view)
+
+
+    def autoFitContent(self):
+        """Calcula y aplica el zoom óptimo para mostrar todo el contenido"""
+        self.view._layout = None
+        layout = self.view._buildLayout()
+        
+        if not layout:
+            return
+        
+        # Obtener el ancho total necesario
+        last_item = layout[-1]
+        last_layer = last_item["layer"]
+        asc = self._getMaster(last_item["masterID"]).ascender
+        desc = self._getMaster(last_item["masterID"]).descender
+        height = 600
+        total_height = asc - desc
+        available_height = height - 100
+        scale_base = (available_height / total_height)
+        
+        last_width_base = last_layer.width * scale_base
+        total_width_needed = last_item["x"] + last_width_base + 100
+        
+        # Ancho visible del scroll
+        scroll_width = self.scroll.contentView().bounds().size.width
+        
+        # Calcular zoom necesario para que quepa todo el ancho
+        if total_width_needed > scroll_width:
+            zoom_needed = scroll_width / total_width_needed
+            zoom_needed = max(0.1, min(5.0, zoom_needed))
+        else:
+            zoom_needed = 1.0
+        
+        # Aplicar zoom
+        slider_value = (zoom_needed - 0.1) / 4.9
+        self.w.zoom.set(slider_value)
+        self.view.setZoom_(zoom_needed)
+        self.updateContentSize()
+
+
+    def zoomIn(self, sender):
+        """Zoom in method"""
+        current_zoom = self.view.zoom
+        new_zoom = min(5.0, current_zoom * 1.1)
+        slider_value = (new_zoom - 0.1) / 4.9
+        self.w.zoom.set(slider_value)
+        self.view.setZoom_(new_zoom)
+        self.updateContentSize()
+
+
+    def zoomOut(self, sender):
+        """Zoom out method"""
+        current_zoom = self.view.zoom
+        new_zoom = max(0.1, current_zoom / 1.1)
+        slider_value = (new_zoom - 0.1) / 4.9
+        self.w.zoom.set(slider_value)
+        self.view.setZoom_(new_zoom)
+        self.updateContentSize()
 
 
     def zoom(self, sender):
-
         slider_value = sender.get()
-
-        zoom_value = 0.5 + (slider_value * 2.5)
-
+        zoom_value = 0.1 + (slider_value * 4.9)
         self.view.setZoom_(zoom_value)
-
         self.updateContentSize()
 
 
     def resetView(self, sender):
-
-        self.w.zoom.set(0.0)
-
-        self.view.setZoom_(0.5)
-
-        self.updateContentSize()
-
+        """Reset view to show all content"""
+        self.autoFitContent()
+        
+        # Reset scroll position
         clip_view = self.scroll.contentView()
-
         clip_view.scrollToPoint_(NSMakePoint(0,0))
-
         self.scroll.reflectScrolledClipView_(clip_view)
 
 
     def liveUpdate(self, sender=None):
-
         f = Glyphs.font
 
         if not f:
@@ -377,17 +487,14 @@ class SimpleGlyphPreviewPanel(object):
         glyph = layers[0].parent
 
         if self.view.glyph_name != glyph.name:
-
             self.view.setGlyph_(glyph.name)
-
-            self.updateContentSize()
+            self.autoFitContent()
 
         self.view._layout = None
         self.view.setNeedsDisplay_(True)
 
 
     def updateContentSize(self):
-
         self.view._layout = None
 
         layout = self.view._buildLayout()
@@ -396,67 +503,45 @@ class SimpleGlyphPreviewPanel(object):
             return
 
         last_item = layout[-1]
-
         last_layer = last_item["layer"]
-
         asc = self._getMaster(last_item["masterID"]).ascender
         desc = self._getMaster(last_item["masterID"]).descender
 
         height = 600
-
         total_height = asc - desc
-
         available_height = height - 100
-
         scale = (available_height / total_height) * self.view.zoom
-
         last_width = last_layer.width * scale
-
         total_width = last_item["x"] + last_width + 100
-
         scroll_width = self.scroll.contentView().bounds().size.width
-
         new_width = max(total_width, scroll_width)
 
         self.view.setFrameSize_((new_width, height))
 
 
     def _getMaster(self, masterID):
-
         for m in Glyphs.font.masters:
-
             if m.id == masterID:
                 return m
-
         return None
 
 
     def updateMetrics(self):
-
         metrics = []
-
         for i, m in enumerate(self.font.masters):
-
             metrics.append({
                 "masterID": m.id,
                 "masterIndex": i
             })
-
         self.view.setMetricsList_(metrics)
 
 
     def openGlyph(self, glyphName, masterID):
-
         f = Glyphs.font
-
         glyph = f.glyphs[glyphName]
-
         for layer in glyph.layers:
-
             if layer.associatedMasterId == masterID:
-
                 f.newTab([layer])
-
                 return
 
 
