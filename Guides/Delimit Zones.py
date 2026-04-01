@@ -1,4 +1,4 @@
-# MenuTitle:DeliApache2 Zones
+# MenuTitle:Delimite Zones
 # -*- coding: utf-8 -*-
 # Description: Creates and manages horizontal zones with visual overlays and node-edge highlighting for precise vertical control.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
