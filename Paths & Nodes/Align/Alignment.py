@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import vanilla
-from GlyphsApp import Glyphs
+from GlyphsApp import Glyphs, GSNode
 import math
 import traceback
 
@@ -19,14 +19,14 @@ class AlignTool(object):
         self.w = vanilla.FloatingWindow((240, 420), "Alignment PRO")
 
         self.w.options = vanilla.RadioGroup(
-            (45, 10, -15, 140),
+            (55, 10, -15, 140),
             ["Up", "Center Y", "Down", "Left", "Center X", "Right"]
         )
         self.w.options.set(4)
 
-        # Labels
-        self.w.labelY = vanilla.TextBox((15, 80, -15, 20), "Y |")
-        self.w.labelX = vanilla.TextBox((15, 10, -15, 20), "X —")
+        # Labels (es mantenen)
+        self.w.labelY = vanilla.TextBox((15, 45, 30, 20), "Y |")
+        self.w.labelX = vanilla.TextBox((15, 110, 30, 20), "X —")
 
         self.w.alignButton = vanilla.Button(
             (15, 170, -15, 30),
@@ -60,6 +60,60 @@ class AlignTool(object):
         font = Glyphs.font
         return font.masters[layer.associatedMasterId].italicAngle or 0
 
+    # ========= NODE SELECTION (NOU) =========
+
+    def getSelectedNodes(self, layer):
+
+        nodes = []
+
+        for item in layer.selection:
+            if isinstance(item, GSNode):
+                nodes.append(item)
+
+        log(f"Selected nodes/handles: {len(nodes)}")
+
+        return nodes
+
+    # ========= NODE ALIGN (NOU) =========
+
+    def alignNodes(self, layer, nodes):
+
+        option = self.w.options.get()
+
+        xs = [n.x for n in nodes]
+        ys = [n.y for n in nodes]
+
+        minX = min(xs)
+        maxX = max(xs)
+        minY = min(ys)
+        maxY = max(ys)
+
+        log("NODE/HANDLE ALIGN MODE")
+
+        for n in nodes:
+
+            oldX, oldY = n.x, n.y
+
+            if option == 0:      # Up
+                n.y = maxY
+
+            elif option == 1:    # Center Y
+                n.y = (minY + maxY) / 2
+
+            elif option == 2:    # Down
+                n.y = minY
+
+            elif option == 3:    # Left
+                n.x = minX
+
+            elif option == 4:    # Center X
+                n.x = (minX + maxX) / 2
+
+            elif option == 5:    # Right
+                n.x = maxX
+
+            log(f"NODE MOVE ({oldX},{oldY}) → ({n.x},{n.y})")
+
     # ========= SELECTION =========
 
     def getSelection(self, layer):
@@ -75,7 +129,7 @@ class AlignTool(object):
 
         return paths, comps
 
-    # ========= ALL NODES (ORIGINAL SAFE) =========
+    # ========= ALL NODES =========
 
     def getAllNodes(self, layer):
 
@@ -104,7 +158,7 @@ class AlignTool(object):
 
         return nodes
 
-    # ========= BOUNDS (SAFE VERSION) =========
+    # ========= BOUNDS =========
 
     def getBounds(self, layer, item):
 
@@ -117,7 +171,9 @@ class AlignTool(object):
             for n in item.nodes:
                 xs.append(n.x - n.y * tan)
                 ys.append(n.y)
+
         else:
+
             bg = layer.background
 
             orig_paths = [p.copy() for p in bg.paths]
@@ -193,16 +249,22 @@ class AlignTool(object):
 
         log("\n====== ALIGN LAYER ======")
 
+        # 🔵 PRIORITAT: NODES
+        selectedNodes = self.getSelectedNodes(layer)
+
+        if selectedNodes:
+            self.alignNodes(layer, selectedNodes)
+            return
+
+        # PATHS / COMPONENTS
         paths, comps = self.getSelection(layer)
         option = self.w.options.get()
 
-        # TRUE WIDTH
         if self.w.trueWidth.get() and option == 4:
             log("TRUE WIDTH MODE")
             self.applyTrueWidth(layer)
             return
 
-        # 🔥 GROUP LOGIC CORRECTA
         if self.w.pathsAsGroup.get() and comps:
             log("🔥 GROUP MODE (paths → component)")
             refItems = comps
@@ -214,7 +276,6 @@ class AlignTool(object):
         log(f"Reference items: {len(refItems)}")
         log(f"Move items: {len(moveItems)}")
 
-        # reference
         minX, minY, maxX, maxY = self.getGroupBounds(layer, refItems)
 
         if option == 0:
@@ -232,7 +293,6 @@ class AlignTool(object):
 
         log(f"REFERENCE: {ref}")
 
-        # group
         minX, minY, maxX, maxY = self.getGroupBounds(layer, moveItems)
 
         dx = dy = 0
@@ -253,7 +313,6 @@ class AlignTool(object):
         log(f"GROUP MOVE dx={dx}, dy={dy}")
 
         for item in moveItems:
-            log(f"Moving item: {item}")
 
             if hasattr(item, "nodes"):
                 for n in item.nodes:
@@ -267,15 +326,17 @@ class AlignTool(object):
     def align(self, sender):
 
         font = Glyphs.font
-
         font.disableUpdateInterface()
 
         try:
+
             for layer in font.selectedLayers:
+
                 glyph = layer.parent
 
                 if self.w.scope.get() == 0:
                     self.alignLayer(layer)
+
                 else:
                     for l in glyph.layers:
                         if l.isMasterLayer or l.isSpecialLayer:
