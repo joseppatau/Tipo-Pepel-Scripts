@@ -1,4 +1,4 @@
-# MenuTitle: Alignment (FINAL TRUE WIDTH PRO)
+# MenuTitle: Alignment (PRO FINAL)
 # -*- coding: utf-8 -*-
 
 import vanilla
@@ -8,7 +8,6 @@ import traceback
 
 DEBUG = True
 
-
 def log(msg):
     if DEBUG:
         print(msg)
@@ -17,17 +16,17 @@ def log(msg):
 class AlignTool(object):
 
     def __init__(self):
-        self.w = vanilla.FloatingWindow((240, 360), "Alignment PRO")
+        self.w = vanilla.FloatingWindow((240, 420), "Alignment PRO")
 
         self.w.options = vanilla.RadioGroup(
             (45, 10, -15, 140),
             ["Up", "Center Y", "Down", "Left", "Center X", "Right"]
         )
         self.w.options.set(4)
-        
-        self.w.labelY = vanilla.TextBox((17, 80, -15, 20), "Y |")
+
+        # Labels
+        self.w.labelY = vanilla.TextBox((15, 80, -15, 20), "Y |")
         self.w.labelX = vanilla.TextBox((15, 10, -15, 20), "X —")
-        self.w.options.set(0)
 
         self.w.alignButton = vanilla.Button(
             (15, 170, -15, 30),
@@ -47,46 +46,44 @@ class AlignTool(object):
         )
         self.w.scope.set(0)
 
+        self.w.pathsAsGroup = vanilla.CheckBox(
+            (15, 290, -15, 20),
+            "Paths as group",
+            value=True
+        )
+
         self.w.open()
 
     # ========= ITALIC =========
 
     def getItalicAngle(self, layer):
         font = Glyphs.font
-        master = font.masters[layer.associatedMasterId]
-        angle = master.italicAngle or 0
-        log(f"Italic angle: {angle}")
-        return angle
+        return font.masters[layer.associatedMasterId].italicAngle or 0
 
     # ========= SELECTION =========
 
-    def getItems(self, layer):
+    def getSelection(self, layer):
         paths = [p for p in layer.paths if p.selected]
         comps = [c for c in layer.components if c.selected]
 
-        log(f"Paths selected: {len(paths)}")
-        log(f"Components selected: {len(comps)}")
+        if not paths and not comps:
+            paths = list(layer.paths)
+            comps = list(layer.components)
 
-        items = paths + comps
+        log(f"Selected paths: {len(paths)}")
+        log(f"Selected components: {len(comps)}")
 
-        if not items:
-            log("No selection → using all items")
-            items = list(layer.paths) + list(layer.components)
+        return paths, comps
 
-        log(f"Total items used: {len(items)}")
-        return items
-
-    # ========= GET ALL NODES (KEY) =========
+    # ========= ALL NODES (ORIGINAL SAFE) =========
 
     def getAllNodes(self, layer):
 
         nodes = []
 
-        # paths
         for p in layer.paths:
             nodes.extend(p.nodes)
 
-        # components → descomponer
         bg = layer.background
         orig_paths = [p.copy() for p in bg.paths]
         orig_comps = [c.copy() for c in bg.components]
@@ -99,28 +96,26 @@ class AlignTool(object):
             for p in bg.paths:
                 nodes.extend(p.nodes)
 
-        # restore
         bg.clear()
         for p in orig_paths:
             bg.paths.append(p)
         for c in orig_comps:
             bg.components.append(c)
 
-        log(f"Total nodes collected: {len(nodes)}")
         return nodes
 
-    # ========= BOUNDS (ITALIC-AWARE) =========
+    # ========= BOUNDS (SAFE VERSION) =========
 
     def getBounds(self, layer, item):
 
         angle = self.getItalicAngle(layer)
-        tan_angle = math.tan(math.radians(angle))
+        tan = math.tan(math.radians(angle))
 
         xs, ys = [], []
 
         if hasattr(item, "nodes"):
             for n in item.nodes:
-                xs.append(n.x - (n.y * tan_angle))
+                xs.append(n.x - n.y * tan)
                 ys.append(n.y)
         else:
             bg = layer.background
@@ -134,7 +129,7 @@ class AlignTool(object):
 
             for p in bg.paths:
                 for n in p.nodes:
-                    xs.append(n.x - (n.y * tan_angle))
+                    xs.append(n.x - n.y * tan)
                     ys.append(n.y)
 
             bg.clear()
@@ -143,25 +138,84 @@ class AlignTool(object):
             for c in orig_comps:
                 bg.components.append(c)
 
-        if not xs:
-            return 0, 0, 0, 0
+        return min(xs), min(ys), max(xs), max(ys)
 
-        bounds = (min(xs), min(ys), max(xs), max(ys))
-        log(f"Bounds: {bounds}")
-        return bounds
+    def getGroupBounds(self, layer, items):
 
-    # ========= GLOBAL REFERENCE =========
+        log("=== GROUP BOUNDS ===")
 
-    def getReference(self, layer, items, option):
+        bounds = [self.getBounds(layer, i) for i in items]
 
-        bounds_list = [self.getBounds(layer, i) for i in items]
+        minX = min(b[0] for b in bounds)
+        minY = min(b[1] for b in bounds)
+        maxX = max(b[2] for b in bounds)
+        maxY = max(b[3] for b in bounds)
 
-        minX = min(b[0] for b in bounds_list)
-        minY = min(b[1] for b in bounds_list)
-        maxX = max(b[2] for b in bounds_list)
-        maxY = max(b[3] for b in bounds_list)
+        log(f"Group bounds: {(minX, minY, maxX, maxY)}")
 
-        log(f"GLOBAL bounds: {(minX, minY, maxX, maxY)}")
+        return minX, minY, maxX, maxY
+
+    # ========= TRUE WIDTH =========
+
+    def applyTrueWidth(self, layer):
+
+        try:
+            nodes = self.getAllNodes(layer)
+
+            if not nodes:
+                return
+
+            angle = self.getItalicAngle(layer)
+            tan = math.tan(math.radians(angle))
+
+            projected = [n.x - n.y * tan for n in nodes]
+
+            left = min(projected)
+            right = max(projected)
+
+            overflow = max(0, right - layer.width)
+            width = (right - left) + overflow
+
+            margin = layer.width - width
+            side = margin / 2
+
+            layer.LSB = side
+            layer.RSB = side
+
+            log("TRUE WIDTH applied")
+
+        except:
+            traceback.print_exc()
+
+    # ========= ALIGN =========
+
+    def alignLayer(self, layer):
+
+        log("\n====== ALIGN LAYER ======")
+
+        paths, comps = self.getSelection(layer)
+        option = self.w.options.get()
+
+        # TRUE WIDTH
+        if self.w.trueWidth.get() and option == 4:
+            log("TRUE WIDTH MODE")
+            self.applyTrueWidth(layer)
+            return
+
+        # 🔥 GROUP LOGIC CORRECTA
+        if self.w.pathsAsGroup.get() and comps:
+            log("🔥 GROUP MODE (paths → component)")
+            refItems = comps
+            moveItems = paths
+        else:
+            refItems = paths + comps
+            moveItems = paths + comps
+
+        log(f"Reference items: {len(refItems)}")
+        log(f"Move items: {len(moveItems)}")
+
+        # reference
+        minX, minY, maxX, maxY = self.getGroupBounds(layer, refItems)
 
         if option == 0:
             ref = maxY
@@ -176,14 +230,10 @@ class AlignTool(object):
         elif option == 5:
             ref = maxX
 
-        log(f"REFERENCE: {ref:.2f}")
-        return ref
+        log(f"REFERENCE: {ref}")
 
-    # ========= MOVE =========
-
-    def moveItem(self, layer, item, option, ref):
-
-        minX, minY, maxX, maxY = self.getBounds(layer, item)
+        # group
+        minX, minY, maxX, maxY = self.getGroupBounds(layer, moveItems)
 
         dx = dy = 0
 
@@ -200,96 +250,23 @@ class AlignTool(object):
         elif option == 5:
             dx = ref - maxX
 
-        log(f"MOVE → dx={dx:.2f}, dy={dy:.2f}")
+        log(f"GROUP MOVE dx={dx}, dy={dy}")
 
-        if hasattr(item, "nodes"):
-            for n in item.nodes:
-                n.x += dx
-                n.y += dy
-        else:
-            item.applyTransform((1, 0, 0, 1, dx, dy))
+        for item in moveItems:
+            log(f"Moving item: {item}")
 
-    # ========= TRUE WIDTH (YOUR METHOD) =========
-
-    def applyTrueWidth(self, layer):
-
-        try:
-            nodes = self.getAllNodes(layer)
-
-            if not nodes:
-                log("No nodes → abort")
-                return
-
-            angle = self.getItalicAngle(layer)
-            tan_angle = math.tan(math.radians(angle))
-
-            projected = [n.x - (n.y * tan_angle) for n in nodes]
-
-            left = min(projected)
-            right = max(projected)
-
-            log(f"Projected left: {left:.2f}")
-            log(f"Projected right: {right:.2f}")
-
-            overflow_right = max(0, right - layer.width)
-
-            log(f"Overflow right: {overflow_right:.2f}")
-
-            path_width = (right - left) + overflow_right
-
-            log(f"Path width: {path_width:.2f}")
-            log(f"Glyph width: {layer.width}")
-
-            margin = layer.width - path_width
-            side = margin / 2
-
-            new_lsb = side
-            new_rsb = side
-
-            log(f"New LSB: {new_lsb:.2f}")
-            log(f"New RSB: {new_rsb:.2f}")
-
-            layer.LSB = new_lsb
-            layer.RSB = new_rsb
-
-            log("✅ TRUE WIDTH CENTER APPLIED")
-
-        except:
-            traceback.print_exc()
-
-    # ========= ALIGN =========
-
-    def alignLayer(self, layer):
-
-        log("\n========================")
-        log(f"LAYER: {layer.name}")
-
-        items = self.getItems(layer)
-        option = self.w.options.get()
-
-        log(f"OPTION: {option}")
-
-        if self.w.trueWidth.get() and option == 4:
-            log("MODE: TRUE WIDTH CENTER")
-            self.applyTrueWidth(layer)
-            return
-
-        ref = self.getReference(layer, items, option)
-
-        for item in items:
-            self.moveItem(layer, item, option, ref)
+            if hasattr(item, "nodes"):
+                for n in item.nodes:
+                    n.x += dx
+                    n.y += dy
+            else:
+                item.applyTransform((1, 0, 0, 1, dx, dy))
 
     # ========= MAIN =========
 
     def align(self, sender):
 
-        log("\n🟢 RUN ALIGN")
-
         font = Glyphs.font
-
-        if not font.selectedLayers:
-            log("No layers selected")
-            return
 
         font.disableUpdateInterface()
 
@@ -303,6 +280,7 @@ class AlignTool(object):
                     for l in glyph.layers:
                         if l.isMasterLayer or l.isSpecialLayer:
                             self.alignLayer(l)
+
         finally:
             font.enableUpdateInterface()
 
