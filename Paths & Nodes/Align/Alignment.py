@@ -1,10 +1,8 @@
-# MenuTitle: Alignment (PRO FINAL)
+# MenuTitle: Alignment PRO FINAL (Transform Safe)
 # -*- coding: utf-8 -*-
 
 import vanilla
-from GlyphsApp import Glyphs, GSNode
-import math
-import traceback
+from GlyphsApp import Glyphs
 
 DEBUG = True
 
@@ -16,17 +14,17 @@ def log(msg):
 class AlignTool(object):
 
     def __init__(self):
-        self.w = vanilla.FloatingWindow((240, 420), "Alignment PRO")
+
+        self.w = vanilla.FloatingWindow((240, 520), "Alignment PRO")
+
+        # ===== ALIGN =====
+        self.w.label = vanilla.TextBox((15, 10, -15, 20), "X —   Y |")
 
         self.w.options = vanilla.RadioGroup(
-            (55, 10, -15, 140),
+            (15, 30, -15, 140),
             ["Up", "Center Y", "Down", "Left", "Center X", "Right"]
         )
         self.w.options.set(4)
-
-        # Labels (es mantenen)
-        self.w.labelY = vanilla.TextBox((15, 45, 30, 20), "Y |")
-        self.w.labelX = vanilla.TextBox((15, 110, 30, 20), "X —")
 
         self.w.alignButton = vanilla.Button(
             (15, 170, -15, 30),
@@ -34,316 +32,299 @@ class AlignTool(object):
             callback=self.align
         )
 
-        self.w.trueWidth = vanilla.CheckBox(
-            (15, 210, -15, 20),
-            "Align to width",
-            value=False
-        )
-
+        # ===== SCOPE =====
         self.w.scope = vanilla.RadioGroup(
-            (15, 240, -15, 40),
+            (15, 210, -15, 40),
             ["Current", "All masters"]
         )
         self.w.scope.set(0)
 
         self.w.pathsAsGroup = vanilla.CheckBox(
-            (15, 290, -15, 20),
+            (15, 260, -15, 20),
             "Paths as group",
             value=True
         )
 
+        # ===== Y POSITION =====
+        self.w.sep = vanilla.HorizontalLine((10, 290, -10, 1))
+
+        self.w.yMode = vanilla.RadioGroup(
+            (15, 300, 200, 40),
+            ["Up", "Center", "Down"],
+            isVertical=False
+        )
+        self.w.yMode.set(0)
+
+        self.w.yLabel = vanilla.TextBox((15, 340, 80, 20), "Y position")
+
+        self.w.yInput = vanilla.EditText((95, 337, 60, 22), "0")
+
+        self.w.yApply = vanilla.Button(
+            (160, 335, 30, 24),
+            "▶",
+            callback=self.applyYPosition
+        )
+
+        self.w.yPreset = vanilla.PopUpButton(
+            (15, 370, -15, 25),
+            ["— Presets —", "Baseline", "x-height", "Cap height", "Ascender", "Descender"],
+            callback=self.applyYPreset
+        )
+
         self.w.open()
-
-    # ========= ITALIC =========
-
-    def getItalicAngle(self, layer):
-        font = Glyphs.font
-        return font.masters[layer.associatedMasterId].italicAngle or 0
-
-    # ========= NODE SELECTION (NOU) =========
-
-    def getSelectedNodes(self, layer):
-
-        nodes = []
-
-        for item in layer.selection:
-            if isinstance(item, GSNode):
-                nodes.append(item)
-
-        log(f"Selected nodes/handles: {len(nodes)}")
-
-        return nodes
-
-    # ========= NODE ALIGN (NOU) =========
-
-    def alignNodes(self, layer, nodes):
-
-        option = self.w.options.get()
-
-        xs = [n.x for n in nodes]
-        ys = [n.y for n in nodes]
-
-        minX = min(xs)
-        maxX = max(xs)
-        minY = min(ys)
-        maxY = max(ys)
-
-        log("NODE/HANDLE ALIGN MODE")
-
-        for n in nodes:
-
-            oldX, oldY = n.x, n.y
-
-            if option == 0:      # Up
-                n.y = maxY
-
-            elif option == 1:    # Center Y
-                n.y = (minY + maxY) / 2
-
-            elif option == 2:    # Down
-                n.y = minY
-
-            elif option == 3:    # Left
-                n.x = minX
-
-            elif option == 4:    # Center X
-                n.x = (minX + maxX) / 2
-
-            elif option == 5:    # Right
-                n.x = maxX
-
-            log(f"NODE MOVE ({oldX},{oldY}) → ({n.x},{n.y})")
 
     # ========= SELECTION =========
 
     def getSelection(self, layer):
+
         paths = [p for p in layer.paths if p.selected]
         comps = [c for c in layer.components if c.selected]
+        anchors = [a for a in layer.anchors if a.selected]
 
-        if not paths and not comps:
-            paths = list(layer.paths)
-            comps = list(layer.components)
+        log(f"Paths: {len(paths)} | Comps: {len(comps)} | Anchors: {len(anchors)}")
 
-        log(f"Selected paths: {len(paths)}")
-        log(f"Selected components: {len(comps)}")
+        return paths, comps, anchors
 
-        return paths, comps
+    # ========= SAFE BOUNDS (FIX CLAU) =========
 
-    # ========= ALL NODES =========
+    def getBounds(self, items):
 
-    def getAllNodes(self, layer):
-
-        nodes = []
-
-        for p in layer.paths:
-            nodes.extend(p.nodes)
-
-        bg = layer.background
-        orig_paths = [p.copy() for p in bg.paths]
-        orig_comps = [c.copy() for c in bg.components]
-
-        for c in layer.components:
-            bg.clear()
-            bg.components.append(c.copy())
-            bg.decomposeComponents()
-
-            for p in bg.paths:
-                nodes.extend(p.nodes)
-
-        bg.clear()
-        for p in orig_paths:
-            bg.paths.append(p)
-        for c in orig_comps:
-            bg.components.append(c)
-
-        return nodes
-
-    # ========= BOUNDS =========
-
-    def getBounds(self, layer, item):
-
-        angle = self.getItalicAngle(layer)
-        tan = math.tan(math.radians(angle))
+        if not items:
+            return None
 
         xs, ys = [], []
 
-        if hasattr(item, "nodes"):
-            for n in item.nodes:
-                xs.append(n.x - n.y * tan)
-                ys.append(n.y)
+        font = Glyphs.font
+        masterID = font.selectedFontMaster.id
 
-        else:
+        for item in items:
 
-            bg = layer.background
-
-            orig_paths = [p.copy() for p in bg.paths]
-            orig_comps = [c.copy() for c in bg.components]
-
-            bg.clear()
-            bg.components.append(item.copy())
-            bg.decomposeComponents()
-
-            for p in bg.paths:
-                for n in p.nodes:
-                    xs.append(n.x - n.y * tan)
+            # ---- PATH ----
+            if hasattr(item, "nodes"):
+                for n in item.nodes:
+                    xs.append(n.x)
                     ys.append(n.y)
 
-            bg.clear()
-            for p in orig_paths:
-                bg.paths.append(p)
-            for c in orig_comps:
-                bg.components.append(c)
+            # ---- ANCHOR ----
+            elif hasattr(item, "position"):
+                xs.append(item.x)
+                ys.append(item.y)
+
+            # ---- COMPONENT (TRANSFORM SAFE) ----
+            else:
+                try:
+                    baseLayer = item.component.layers[masterID]
+                    tempLayer = baseLayer.copyDecomposedLayer()
+
+                    tempLayer.applyTransform(item.transform)
+
+                    b = tempLayer.bounds
+
+                    xs += [b.origin.x, b.origin.x + b.size.width]
+                    ys += [b.origin.y, b.origin.y + b.size.height]
+
+                except Exception as e:
+                    log(f"Component fallback: {e}")
+                    xs.append(item.x)
+                    ys.append(item.y)
+
+        if not xs or not ys:
+            return None
 
         return min(xs), min(ys), max(xs), max(ys)
 
-    def getGroupBounds(self, layer, items):
+    # ========= MOVE =========
 
-        log("=== GROUP BOUNDS ===")
+    def moveItems(self, items, dx, dy):
 
-        bounds = [self.getBounds(layer, i) for i in items]
+        log(f"MOVE dx={dx}, dy={dy}")
 
-        minX = min(b[0] for b in bounds)
-        minY = min(b[1] for b in bounds)
-        maxX = max(b[2] for b in bounds)
-        maxY = max(b[3] for b in bounds)
-
-        log(f"Group bounds: {(minX, minY, maxX, maxY)}")
-
-        return minX, minY, maxX, maxY
-
-    # ========= TRUE WIDTH =========
-
-    def applyTrueWidth(self, layer):
-
-        try:
-            nodes = self.getAllNodes(layer)
-
-            if not nodes:
-                return
-
-            angle = self.getItalicAngle(layer)
-            tan = math.tan(math.radians(angle))
-
-            projected = [n.x - n.y * tan for n in nodes]
-
-            left = min(projected)
-            right = max(projected)
-
-            overflow = max(0, right - layer.width)
-            width = (right - left) + overflow
-
-            margin = layer.width - width
-            side = margin / 2
-
-            layer.LSB = side
-            layer.RSB = side
-
-            log("TRUE WIDTH applied")
-
-        except:
-            traceback.print_exc()
-
-    # ========= ALIGN =========
-
-    def alignLayer(self, layer):
-
-        log("\n====== ALIGN LAYER ======")
-
-        # 🔵 PRIORITAT: NODES
-        selectedNodes = self.getSelectedNodes(layer)
-
-        if selectedNodes:
-            self.alignNodes(layer, selectedNodes)
-            return
-
-        # PATHS / COMPONENTS
-        paths, comps = self.getSelection(layer)
-        option = self.w.options.get()
-
-        if self.w.trueWidth.get() and option == 4:
-            log("TRUE WIDTH MODE")
-            self.applyTrueWidth(layer)
-            return
-
-        if self.w.pathsAsGroup.get() and comps:
-            log("🔥 GROUP MODE (paths → component)")
-            refItems = comps
-            moveItems = paths
-        else:
-            refItems = paths + comps
-            moveItems = paths + comps
-
-        log(f"Reference items: {len(refItems)}")
-        log(f"Move items: {len(moveItems)}")
-
-        minX, minY, maxX, maxY = self.getGroupBounds(layer, refItems)
-
-        if option == 0:
-            ref = maxY
-        elif option == 1:
-            ref = (minY + maxY) / 2
-        elif option == 2:
-            ref = minY
-        elif option == 3:
-            ref = minX
-        elif option == 4:
-            ref = (minX + maxX) / 2
-        elif option == 5:
-            ref = maxX
-
-        log(f"REFERENCE: {ref}")
-
-        minX, minY, maxX, maxY = self.getGroupBounds(layer, moveItems)
-
-        dx = dy = 0
-
-        if option == 0:
-            dy = ref - maxY
-        elif option == 1:
-            dy = ref - ((minY + maxY) / 2)
-        elif option == 2:
-            dy = ref - minY
-        elif option == 3:
-            dx = ref - minX
-        elif option == 4:
-            dx = ref - ((minX + maxX) / 2)
-        elif option == 5:
-            dx = ref - maxX
-
-        log(f"GROUP MOVE dx={dx}, dy={dy}")
-
-        for item in moveItems:
+        for item in items:
 
             if hasattr(item, "nodes"):
                 for n in item.nodes:
                     n.x += dx
                     n.y += dy
-            else:
-                item.applyTransform((1, 0, 0, 1, dx, dy))
+
+            elif hasattr(item, "position"):  # anchor
+                item.x += dx
+                item.y += dy
+
+            elif hasattr(item, "x") and hasattr(item, "y"):  # component
+                item.x += dx
+                item.y += dy
+
+    # ========= ALIGN =========
+
+    def alignLayer(self, layer):
+
+        log("\n=== ALIGN LAYER ===")
+
+        paths, comps, anchors = self.getSelection(layer)
+
+        if not paths and not comps and not anchors:
+            return
+
+        # RELACIONAL
+        if paths and comps:
+            refItems = comps
+            moveItems = paths + anchors
+            log("MODE: PATHS → COMPONENT")
+
+        elif comps:
+            refItems = comps
+            moveItems = comps
+            log("MODE: COMPONENT")
+
+        else:
+            refItems = paths + anchors
+            moveItems = paths + anchors
+            log("MODE: GROUP")
+
+        boundsMove = self.getBounds(moveItems)
+        boundsRef = self.getBounds(refItems)
+
+        log(f"Bounds MOVE: {boundsMove}")
+        log(f"Bounds REF: {boundsRef}")
+
+        if not boundsMove or not boundsRef:
+            return
+
+        minX, minY, maxX, maxY = boundsMove
+        minXr, minYr, maxXr, maxYr = boundsRef
+
+        cx = (minX + maxX) / 2
+        cy = (minY + maxY) / 2
+
+        option = self.w.options.get()
+
+        if option == 0: dx, dy = 0, maxYr - maxY
+        elif option == 1: dx, dy = 0, ((minYr+maxYr)/2) - cy
+        elif option == 2: dx, dy = 0, minYr - minY
+        elif option == 3: dx, dy = minXr - minX, 0
+        elif option == 4: dx, dy = ((minXr+maxXr)/2) - cx, 0
+        elif option == 5: dx, dy = maxXr - maxX, 0
+
+        log(f"RESULT dx={dx}, dy={dy}")
+
+        self.moveItems(moveItems, dx, dy)
+
+    # ========= MOVE Y =========
+
+    def applyYToLayer(self, layer, targetY):
+
+        log("\n=== Y POSITION ===")
+
+        paths, comps, anchors = self.getSelection(layer)
+
+        moveItems = paths + comps + anchors
+
+        if not moveItems:
+            return
+
+        bounds = self.getBounds(moveItems)
+
+        log(f"Bounds: {bounds}")
+
+        if not bounds:
+            return
+
+        minX, minY, maxX, maxY = bounds
+
+        mode = self.w.yMode.get()
+
+        if mode == 0:
+            currentY = maxY
+        elif mode == 1:
+            currentY = (minY + maxY) / 2
+        else:
+            currentY = minY
+
+        dy = targetY - currentY
+
+        log(f"TARGET Y: {targetY}")
+        log(f"CURRENT Y: {currentY}")
+        log(f"RESULT dy={dy}")
+
+        self.moveItems(moveItems, 0, dy)
+
+    def applyYPosition(self, sender):
+
+        font = Glyphs.font
+
+        try:
+            targetY = float(self.w.yInput.get())
+        except:
+            log("Invalid Y")
+            return
+
+        font.disableUpdateInterface()
+
+        try:
+            for layer in font.selectedLayers:
+
+                glyph = layer.parent
+
+                if self.w.scope.get():
+                    for m in font.masters:
+                        self.applyYToLayer(glyph.layers[m.id], targetY)
+                else:
+                    self.applyYToLayer(layer, targetY)
+
+        finally:
+            font.enableUpdateInterface()
+
+        Glyphs.redraw()
+
+    # ========= PRESETS =========
+
+    def applyYPreset(self, sender):
+
+        index = self.w.yPreset.get()
+
+        if index == 0:
+            return
+
+        master = Glyphs.font.selectedFontMaster
+
+        values = [
+            0,
+            master.xHeight,
+            master.capHeight,
+            master.ascender,
+            master.descender
+        ]
+
+        y = values[index-1]
+
+        log(f"Preset Y: {y}")
+
+        self.w.yInput.set(str(y))
+        self.applyYPosition(None)
 
     # ========= MAIN =========
 
     def align(self, sender):
 
         font = Glyphs.font
+
         font.disableUpdateInterface()
 
         try:
-
             for layer in font.selectedLayers:
 
                 glyph = layer.parent
 
-                if self.w.scope.get() == 0:
-                    self.alignLayer(layer)
-
+                if self.w.scope.get():
+                    for m in font.masters:
+                        self.alignLayer(glyph.layers[m.id])
                 else:
-                    for l in glyph.layers:
-                        if l.isMasterLayer or l.isSpecialLayer:
-                            self.alignLayer(l)
+                    self.alignLayer(layer)
 
         finally:
             font.enableUpdateInterface()
+
+        Glyphs.redraw()
 
 
 AlignTool()
