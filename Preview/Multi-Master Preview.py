@@ -1,463 +1,232 @@
-# MenuTitle: Multi-Master Preview
+# MenuTitle: Multi-Master Preview PRO (Full & ⌘ Drag)
 # -*- coding: utf-8 -*-
-# Description: Displays the current glyph across all masters side by side for visual comparison.
-# Author: Designed by Josep Patau Bellart, programmed with AI tools
-# If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
-# License: Apache2
 
 from GlyphsApp import *
 from vanilla import *
 from AppKit import *
 import objc
+import os
+import json
 
+# Import explícit per a la gestió de ratolí i teclat
+from AppKit import NSEvent, NSEventModifierFlagCommand, NSCursor
 
-if 'SimpleGlyphPreviewView' not in globals():
+def log(msg):
+    print(f"DEBUG: {msg}")
 
-    class SimpleGlyphPreviewView(NSView):
+# --- Preferències ---
+def get_prefs_path():
+    try:
+        folder = GSGlyphsInfo.applicationSupportPath()
+    except:
+        folder = os.path.expanduser("~/Library/Application Support/Glyphs 3")
+    if not os.path.exists(folder): os.makedirs(folder)
+    return os.path.join(folder, "MultiMasterPreviewConfig.json")
 
+SUPPORT_PATH = get_prefs_path()
+
+# 1. CLASSE DE PREVISUALITZACIÓ
+try:
+    DraggablePreviewView = objc.lookUpClass("DraggablePreviewView")
+except:
+    class DraggablePreviewView(NSView):
         def initWithFrame_(self, frame):
-
-            self = objc.super(SimpleGlyphPreviewView, self).initWithFrame_(frame)
-            if self is None:
-                return None
-
-            self.glyph_name = None
-            self.metrics_list = []
-            self.zoom = 0.5
-            self._layout = None
-
-            self.on_double_click = None
-            self.parent_panel = None
-
+            self = objc.super(DraggablePreviewView, self).initWithFrame_(frame)
+            if self is None: return None
+            self.glyph_data = []
+            self.zoom = 0.7
+            self.vertical_offset = 300
             self.is_dragging = False
-            self.drag_start_x = 0
-            self.drag_start_y = 0
-
-            self.space_pressed = False
-
+            self.drag_start = None
             return self
 
-
-        def setGlyph_(self, name):
-
-            self.glyph_name = name
-            self._layout = None
-            self.setNeedsDisplay_(True)
-
-
-        def setMetricsList_(self, metrics):
-
-            self.metrics_list = metrics
-            self._layout = None
-            self.setNeedsDisplay_(True)
-
-
-        def setZoom_(self, zoom):
-
-            self.zoom = zoom
-            self._layout = None
-            self.setNeedsDisplay_(True)
-
-
-        def setDoubleClickCallback_(self, callback):
-
-            self.on_double_click = callback
-
-
-        def setParentPanel_(self, panel):
-
-            self.parent_panel = panel
-
-
-        @objc.python_method
-        def _getMaster(self, masterID):
-
-            f = Glyphs.font
-
-            for m in f.masters:
-                if m.id == masterID:
-                    return m
-
-            return None
-
-
-        @objc.python_method
-        def _getLayer(self, glyph, masterID):
-
-            for l in glyph.layers:
-                if l.associatedMasterId == masterID:
-                    return l
-
-            return None
-
-
-        @objc.python_method
-        def _buildLayout(self):
-
-            f = Glyphs.font
-
-            if not f or not self.glyph_name:
-                return []
-
-            glyph = f.glyphs[self.glyph_name]
-
-            if not glyph:
-                return []
-
-            height = 600   # ALTURA FIJA (evita zoom fantasma)
-
-            x = 40
-            padding = 30
-
-            layout = []
-
-            for metrics in self.metrics_list:
-
-                master = self._getMaster(metrics["masterID"])
-                if not master:
-                    continue
-
-                layer = self._getLayer(glyph, master.id)
-                if not layer:
-                    continue
-
-                asc = master.ascender
-                desc = master.descender
-                total_height = asc - desc
-
-                available_height = height - 100
-                scale = (available_height / total_height) * self.zoom
-
-                baseline = 80 + (-desc * scale)
-
-                width = layer.width * scale
-
-                rect = NSMakeRect(x - 10, 0, width + 20, height)
-
-                item = {
-                    "glyph": glyph.name,
-                    "layer": layer,
-                    "path": layer.completeBezierPath.copy(),
-                    "masterID": master.id,
-                    "scale": scale,
-                    "baseline": baseline,
-                    "x": x,
-                    "rect": rect
-                }
-
-                layout.append(item)
-
-                x += width + 50
-
-            return layout
-
+        def acceptsFirstResponder(self): return True
+        def acceptsFirstMouse_(self, event): return True
 
         def drawRect_(self, rect):
-
             NSColor.whiteColor().set()
             NSBezierPath.fillRect_(self.bounds())
-
-            if not self.glyph_name or not self.metrics_list:
-                return
-
-            if self._layout is None:
-                self._layout = self._buildLayout()
-
-            for item in self._layout:
-
-                path = item["path"].copy()
-
-                t = NSAffineTransform.transform()
-
-                t.translateXBy_yBy_(item["x"], item["baseline"])
-                t.scaleXBy_yBy_(item["scale"], item["scale"])
-
-                path.transformUsingAffineTransform_(t)
-
-                NSColor.blackColor().set()
-                path.fill()
-
-                NSColor.darkGrayColor().set()
-                path.stroke()
-
-
-        def scrollWheel_(self, event):
-
-            # zoom solo con CMD
-            if not (event.modifierFlags() & NSEventModifierFlagCommand):
-                objc.super(SimpleGlyphPreviewView, self).scrollWheel_(event)
-                return
-
-            delta = event.deltaY()
-
-            zoom_factor = 1.1 if delta > 0 else 0.9
-
-            new_zoom = self.zoom * zoom_factor
-            new_zoom = max(0.5, min(3.0, new_zoom))
-
-            if self.parent_panel:
-                slider_value = (new_zoom - 0.5) / 2.5
-                self.parent_panel.w.zoom.set(slider_value)
-
-            self.setZoom_(new_zoom)
-
-            if self.parent_panel:
-                self.parent_panel.updateContentSize()
-
+            if not self.glyph_data: return
+            
+            x_cursor = 50
+            v_base = self.vertical_offset 
+            for item in self.glyph_data:
+                if item['path']:
+                    p = item['path'].copy()
+                    scale = (400.0 / item['upm']) * self.zoom
+                    baseline = v_base + (item['descender'] * scale)
+                    t = NSAffineTransform.transform()
+                    t.translateXBy_yBy_(x_cursor, baseline)
+                    t.scaleBy_(scale)
+                    p.transformUsingAffineTransform_(t)
+                    NSColor.blackColor().set()
+                    p.fill()
+                    x_cursor += (item['width'] * scale) + (80 * self.zoom)
 
         def mouseDown_(self, event):
-
-            if event.clickCount() == 2:
-
-                point = self.convertPoint_fromView_(event.locationInWindow(), None)
-
-                if not self._layout:
-                    return
-
-                for item in self._layout:
-
-                    if NSPointInRect(point, item["rect"]):
-
-                        if self.on_double_click:
-                            self.on_double_click(item["glyph"], item["masterID"])
-
-                        return
-
-            if NSEvent.modifierFlags() & NSEventModifierFlagOption or self.space_pressed:
-
+            if event.modifierFlags() & NSEventModifierFlagCommand:
                 self.is_dragging = True
-                self.drag_start_x = event.locationInWindow().x
-                self.drag_start_y = event.locationInWindow().y
+                self.drag_start = event.locationInWindow()
                 NSCursor.closedHandCursor().set()
-
+            else:
+                self.is_dragging = False
 
         def mouseDragged_(self, event):
-
-            if not self.is_dragging:
-                return
-
-            scroll_view = None
-            view = self.superview()
-
-            while view and not scroll_view:
-                if hasattr(view, 'documentView'):
-                    scroll_view = view
-                    break
-                view = view.superview()
-
-            if not scroll_view:
-                return
-
-            current_x = event.locationInWindow().x
-            current_y = event.locationInWindow().y
-
-            delta_x = self.drag_start_x - current_x
-            delta_y = self.drag_start_y - current_y
-
-            clip_view = scroll_view.contentView()
-            current_bounds = clip_view.bounds()
-
-            new_x = current_bounds.origin.x + delta_x
-            new_y = current_bounds.origin.y + delta_y
-
-            clip_view.scrollToPoint_(NSMakePoint(new_x, new_y))
-            scroll_view.reflectScrolledClipView_(clip_view)
-
-            self.drag_start_x = current_x
-            self.drag_start_y = current_y
-
+            if not self.is_dragging or self.drag_start is None: return
+            sv = self.enclosingScrollView()
+            if not sv: return
+            current_pos = event.locationInWindow()
+            dx = self.drag_start.x - current_pos.x
+            dy = current_pos.y - self.drag_start.y
+            origin = sv.contentView().bounds().origin
+            new_origin = NSMakePoint(origin.x + dx, origin.y + dy)
+            sv.contentView().scrollToPoint_(new_origin)
+            sv.reflectScrolledClipView_(sv.contentView())
+            self.drag_start = current_pos
 
         def mouseUp_(self, event):
-
             self.is_dragging = False
             NSCursor.arrowCursor().set()
 
-
-
 class NSViewWrapper(VanillaBaseObject):
-
     def __init__(self, posSize, view):
+        self._posSize, self._nsObject = posSize, view
+    def getNSView(self): return self._nsObject
 
-        self._posSize = posSize
-        self._nsObject = view
-
-    def getNSView(self):
-        return self._nsObject
-
-
-
-class SimpleGlyphPreviewPanel(object):
-
+# 2. FINESTRA PRINCIPAL
+class MultiMasterPreviewPanel(object):
     def __init__(self):
-
+        if not Glyphs.font: return
         self.font = Glyphs.font
+        self.prefs = self.load_prefs()
+        
+        # Mida recuperada de prefs
+        w_size = self.prefs.get('w', 1100)
+        h_size = self.prefs.get('h', 600)
+        
+        self.w = Window((w_size, h_size), "Multi-Master Preview PRO", minSize=(800, 500))
+        self.w.tabs = Tabs((10, 10, -10, -10), ["Preview", "Config"])
+        
+        # --- TAB PREVIEW ---
+        tp = self.w.tabs[0]
+        tp.zoom_txt = TextBox((15, 12, 45, 17), "Zoom:", sizeStyle='small')
+        tp.zoom = Slider((60, 10, 100, 20), value=0.7, minValue=0.1, maxValue=2.0, callback=self.updateUI)
+        
+        # BOTONS ZOOM RECUPERATS
+        tp.btn_minus = SquareButton((165, 8, 25, 23), "-", callback=self.zoomOut)
+        tp.btn_plus = SquareButton((190, 8, 25, 23), "+", callback=self.zoomIn)
+        
+        tp.vert_txt = TextBox((235, 12, 60, 17), "Vertical:", sizeStyle='small')
+        tp.verticalPos = Slider((295, 10, 150, 20), value=300, minValue=-500, maxValue=1500, callback=self.updateUI)
+        
+        tp.reset = Button((465, 8, 80, 23), "Reset", callback=self.resetView)
 
-        if not self.font:
-            Message("No Font Open", "Open a font first")
-            return
-
-        self.w = Window((1900,650), "Glyph Preview")
-
-        self.w.zoom = Slider(
-            (20,10,680,20),
-            value=0.0,
-            minValue=0.0,
-            maxValue=1.0,
-            callback=self.zoom
-        )
-
-        self.w.reset_button = Button(
-            (720, 8, 160, 23),
-            "Reset View",
-            callback=self.resetView
-        )
-
-        height = 560
-
-        self.scroll = NSScrollView.alloc().initWithFrame_(((0,0),(860,height)))
-
+        self.scroll = NSScrollView.alloc().initWithFrame_(((0, 0), (1100, 500)))
         self.scroll.setHasHorizontalScroller_(True)
         self.scroll.setHasVerticalScroller_(True)
-
-        self.view = SimpleGlyphPreviewView.alloc().initWithFrame_(((0,0),(2000, height)))
-
-        self.view.setDoubleClickCallback_(self.openGlyph)
-        self.view.setParentPanel_(self)
-
+        self.view = DraggablePreviewView.alloc().initWithFrame_(((0, 0), (10000, 3000)))
         self.scroll.setDocumentView_(self.view)
+        tp.preview = NSViewWrapper((0, 45, -0, -0), self.scroll)
 
-        self.w.preview = NSViewWrapper((20,60,1860,height), self.scroll)
+        # --- TAB CONFIG ---
+        tc = self.w.tabs[1]
+        # Personalització de mida de finestra
+        tc.lbl_w = TextBox((20, 20, 60, 17), "Width:")
+        tc.edit_w = EditText((80, 18, 60, 22), str(int(w_size)))
+        tc.lbl_h = TextBox((160, 20, 60, 17), "Height:")
+        tc.edit_h = EditText((220, 18, 60, 22), str(int(h_size)))
+        tc.apply_btn = Button((300, 18, 120, 22), "Apply & Save", callback=self.save_window_prefs)
+        
+        tc.line = HorizontalLine((20, 55, -20, 1))
+        tc.lbl_m = TextBox((20, 65, 200, 17), "Visible Masters:")
+        
+        tc.masterList = ScrollView((15, 85, -15, -45), None, hasHorizontalScroller=False)
+        self.master_items = []
+        y_pos = 5
+        saved_masters = self.prefs.get('visible_masters', [m.id for m in self.font.masters])
+        
+        for master in self.font.masters:
+            is_on = master.id in saved_masters
+            cb = CheckBox((15, y_pos, -20, 20), master.name, value=is_on, callback=self.updateContent)
+            setattr(tc.masterList, f"cb_{master.id.replace('-','_')}", cb)
+            self.master_items.append((master.id, cb))
+            y_pos += 25
+            
+        tc.selectAll = Button((15, -35, 100, 20), "Select All", sizeStyle='small', callback=self.allAction)
+        tc.deselectAll = Button((120, -35, 100, 20), "Deselect All", sizeStyle='small', callback=self.allAction)
 
-        Glyphs.addCallback(self.liveUpdate, UPDATEINTERFACE)
-
-        self.updateMetrics()
-        self.liveUpdate()
-
+        Glyphs.addCallback(self.updateContent, UPDATEINTERFACE)
+        self.updateContent()
+        self.updateUI(None)
         self.w.open()
+        self.w.makeKey()
 
+    def load_prefs(self):
+        if os.path.exists(SUPPORT_PATH):
+            try:
+                with open(SUPPORT_PATH, "r") as f: return json.load(f)
+            except: pass
+        return {'w': 1100, 'h': 600, 'visible_masters': [m.id for m in self.font.masters]}
 
-    def zoom(self, sender):
+    def save_window_prefs(self, sender=None):
+        try:
+            new_w = int(self.w.tabs[1].edit_w.get())
+            new_h = int(self.w.tabs[1].edit_h.get())
+            self.w.setPosSize((self.w.getPosSize()[0], self.w.getPosSize()[1], new_w, new_h))
+            self.save_all_prefs()
+        except: pass
 
-        slider_value = sender.get()
+    def save_all_prefs(self):
+        visible = [m_id for m_id, cb in self.master_items if cb.get()]
+        curr = self.w.getPosSize()
+        data = {'w': curr[2], 'h': curr[3], 'visible_masters': visible}
+        with open(SUPPORT_PATH, "w") as f: json.dump(data, f)
 
-        zoom_value = 0.5 + (slider_value * 2.5)
+    def allAction(self, sender):
+        state = sender == self.w.tabs[1].selectAll
+        for m_id, cb in self.master_items: cb.set(state)
+        self.updateContent()
 
-        self.view.setZoom_(zoom_value)
-
-        self.updateContentSize()
-
-
-    def resetView(self, sender):
-
-        self.w.zoom.set(0.0)
-
-        self.view.setZoom_(0.5)
-
-        self.updateContentSize()
-
-        clip_view = self.scroll.contentView()
-
-        clip_view.scrollToPoint_(NSMakePoint(0,0))
-
-        self.scroll.reflectScrolledClipView_(clip_view)
-
-
-    def liveUpdate(self, sender=None):
-
-        f = Glyphs.font
-
-        if not f:
-            return
-
-        layers = f.selectedLayers
-
-        if not layers:
-            return
-
-        glyph = layers[0].parent
-
-        if self.view.glyph_name != glyph.name:
-
-            self.view.setGlyph_(glyph.name)
-
-            self.updateContentSize()
-
-        self.view._layout = None
+    def updateUI(self, sender):
+        self.view.zoom = self.w.tabs[0].zoom.get()
+        self.view.vertical_offset = self.w.tabs[0].verticalPos.get()
         self.view.setNeedsDisplay_(True)
 
+    def zoomIn(self, sender):
+        self.w.tabs[0].zoom.set(min(2.0, self.w.tabs[0].zoom.get() + 0.1))
+        self.updateUI(None)
 
-    def updateContentSize(self):
+    def zoomOut(self, sender):
+        self.w.tabs[0].zoom.set(max(0.1, self.w.tabs[0].zoom.get() - 0.1))
+        self.updateUI(None)
 
-        self.view._layout = None
+    def resetView(self, sender):
+        self.w.tabs[0].zoom.set(0.7)
+        self.w.tabs[0].verticalPos.set(300)
+        self.updateUI(None)
+        self.scroll.contentView().scrollToPoint_(NSMakePoint(0, 50))
 
-        layout = self.view._buildLayout()
-
-        if not layout:
-            return
-
-        last_item = layout[-1]
-
-        last_layer = last_item["layer"]
-
-        asc = self._getMaster(last_item["masterID"]).ascender
-        desc = self._getMaster(last_item["masterID"]).descender
-
-        height = 600
-
-        total_height = asc - desc
-
-        available_height = height - 100
-
-        scale = (available_height / total_height) * self.view.zoom
-
-        last_width = last_layer.width * scale
-
-        total_width = last_item["x"] + last_width + 100
-
-        scroll_width = self.scroll.contentView().bounds().size.width
-
-        new_width = max(total_width, scroll_width)
-
-        self.view.setFrameSize_((new_width, height))
-
-
-    def _getMaster(self, masterID):
-
-        for m in Glyphs.font.masters:
-
-            if m.id == masterID:
-                return m
-
-        return None
-
-
-    def updateMetrics(self):
-
-        metrics = []
-
-        for i, m in enumerate(self.font.masters):
-
-            metrics.append({
-                "masterID": m.id,
-                "masterIndex": i
-            })
-
-        self.view.setMetricsList_(metrics)
-
-
-    def openGlyph(self, glyphName, masterID):
-
+    def updateContent(self, sender=None):
         f = Glyphs.font
+        if not f or not f.selectedLayers: return
+        glyph = f.selectedLayers[0].parent
+        new_data = []
+        visible_ids = [m_id for m_id, cb in self.master_items if cb.get()]
+        for m in f.masters:
+            if m.id in visible_ids:
+                l = glyph.layers[m.id]
+                if l:
+                    new_data.append({
+                        'path': l.completeBezierPath.copy(),
+                        'width': l.width,
+                        'upm': f.upm if f.upm > 0 else 1000,
+                        'descender': m.descender
+                    })
+        self.view.glyph_data = new_data
+        self.view.setNeedsDisplay_(True)
+        self.save_all_prefs()
 
-        glyph = f.glyphs[glyphName]
+    def windowWillClose(self, sender):
+        Glyphs.removeCallback(self.updateContent, UPDATEINTERFACE)
 
-        for layer in glyph.layers:
-
-            if layer.associatedMasterId == masterID:
-
-                f.newTab([layer])
-
-                return
-
-
-SimpleGlyphPreviewPanel()
+MultiMasterPreviewPanel()
