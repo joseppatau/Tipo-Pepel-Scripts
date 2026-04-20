@@ -1,4 +1,4 @@
-# MenuTitle: Alignment PRO FINAL (Ultimate Clean + DEBUG)
+# MenuTitle: Alignment PRO FINAL (All Masters FIXED)
 # -*- coding: utf-8 -*-
 # Description: Advanced alignment tool for Glyphs using an italic-aware projection method.  
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
@@ -6,6 +6,7 @@
 # License: Apache2
 
 import vanilla
+import math
 from GlyphsApp import Glyphs, GSComponent
 
 DEBUG = False  # Cambiado a False para modo silencioso
@@ -224,17 +225,42 @@ class AlignTool(object):
         """Lee el valor de overshoot de las blue zones del master actual"""
         try:
             master = Glyphs.font.selectedFontMaster
+            # Intentar con alignmentZones (nueva API)
+            if hasattr(master, 'alignmentZones'):
+                for zone in master.alignmentZones:
+                    try:
+                        # Verificar si zone tiene atributo size
+                        if hasattr(zone, 'size') and zone.size != 0:
+                            overshoot_value = abs(zone.size)
+                            self.w.overshootValue.set(str(overshoot_value))
+                            log(f"Overshoot cargado desde alignmentZones: {overshoot_value}")
+                            return
+                    except:
+                        continue
+            
+            # Fallback: intentar con blueZones (API antigua)
             if hasattr(master, 'blueZones'):
                 for zone in master.blueZones:
-                    # Buscar una blue zone con tamaño > 0 (overshoot)
-                    if zone.size != 0:
-                        overshoot_value = abs(zone.size)
-                        self.w.overshootValue.set(str(overshoot_value))
-                        log(f"Overshoot cargado desde master: {overshoot_value}")
-                        return
-            # Si no encuentra blue zones, usa valor por defecto
+                    try:
+                        # En Glyphs 3, blueZones puede devolver selectors
+                        if hasattr(zone, 'size') and zone.size != 0:
+                            overshoot_value = abs(zone.size)
+                            self.w.overshootValue.set(str(overshoot_value))
+                            log(f"Overshoot cargado desde blueZones: {overshoot_value}")
+                            return
+                        elif isinstance(zone, (list, tuple)) and len(zone) > 1:
+                            # Si zone es una tupla/lista, el segundo elemento podría ser el tamaño
+                            if zone[1] != 0:
+                                overshoot_value = abs(zone[1])
+                                self.w.overshootValue.set(str(overshoot_value))
+                                log(f"Overshoot cargado desde blueZones tupla: {overshoot_value}")
+                                return
+                    except:
+                        continue
+            
+            # Si no encuentra, usar valor por defecto
             self.w.overshootValue.set("10")
-            log("No se encontraron blue zones, usando valor por defecto: 10")
+            log("No se encontraron zonas de overshoot, usando valor por defecto: 10")
         except Exception as e:
             log(f"Error cargando overshoot: {e}")
             self.w.overshootValue.set("10")
@@ -292,7 +318,7 @@ class AlignTool(object):
                     (b.origin.x + b.size.width, b.origin.y),
                     (b.origin.x, b.origin.y + b.size.height),
                     (b.origin.x + b.size.width, b.origin.y + b.size.height),
-             alignLayer   ]
+                ]
 
                 xs = [t.a*x + t.c*y + t.tx for x, y in pts]
                 ys = [t.b*x + t.d*y + t.ty for x, y in pts]
@@ -308,28 +334,6 @@ class AlignTool(object):
 
     def getBounds(self, items, layer):
         return self.getItalicBounds(items, layer)
-        xs, ys = [], []
-
-        for item in items:
-            if hasattr(item, "nodes"):
-                for n in item.nodes:
-                    xs.append(n.x)
-                    ys.append(n.y)
-            elif hasattr(item, "position"):
-                xs.append(item.x)
-                ys.append(item.y)
-            elif isinstance(item, GSComponent):
-                b = self.getComponentBounds(item, layer)
-                xs.extend([b[0], b[2]])
-                ys.extend([b[1], b[3]])
-            elif hasattr(item, "x"):
-                xs.append(item.x)
-                ys.append(item.y)
-
-        if not xs:
-            return None
-
-        return (min(xs), min(ys), max(xs), max(ys))
 
     # ========= MOVE =========
 
@@ -351,12 +355,15 @@ class AlignTool(object):
                 item.x += dx
                 item.y += dy
 
-    # ========= ALIGN =========
+    # ========= ALIGN LAYER =========
 
-    def alignLayer(self, layer):
-
+    def alignLayer(self, layer, ref_bounds=None, ref_component=None):
+        """
+        Alinea un layer específico.
+        Si se proporciona ref_bounds, se usa como referencia.
+        Si se proporciona ref_component, se usa ese componente como referencia fija.
+        """
         nodes, fullPathsFromNodes = self.getSelectionSmart(layer)
-
         paths_selected = [p for p in layer.paths if p.selected]
         paths = []
         for p in paths_selected + fullPathsFromNodes:
@@ -365,66 +372,16 @@ class AlignTool(object):
         comps = [c for c in layer.components if c.selected]
         anchors = [a for a in layer.anchors if a.selected]
 
-        option = self.w.options.get()
-
-        # ===== DEBUG GLOBAL =====
-        if DEBUG:
-            log("\n====================")
-            log("NEW ALIGN CALL")
-            log(f"Nodes partial: {len(nodes)}")
-            log(f"Full paths: {len(fullPathsFromNodes)}")
-            log(f"Paths selected: {len(paths_selected)}")
-            log(f"Paths FINAL: {len(paths)}")
-            log(f"Components: {len(comps)}")
-            log(f"Anchors: {len(anchors)}")
-            log(f"pathsAsGroup: {self.w.pathsAsGroup.get()}")
-
         # NODE MODE
-        
-        # ===== NEW CASE: FULL PATH ↔ SEGMENT =====
-        if nodes and fullPathsFromNodes:
-
-            log("🧠 MODE: FULL PATH ↔ SEGMENT")
-
-            # Segment (nodes parcials) = referencia
-            bRef = self.getBounds(nodes, layer)
-            if not bRef:
-                return
-
-            minXr, minYr, maxXr, maxYr = bRef
-            cxr = (minXr + maxXr) / 2
-            cyr = (minYr + maxYr) / 2
-
-            # Paths completos = elementos a mover
-            for p in fullPathsFromNodes:
-
-                b = self.getBounds([p], layer)
-                if not b:
-                    continue
-
-                minX, minY, maxX, maxY = b
-                cx = (minX + maxX) / 2
-                cy = (minY + maxY) / 2
-
-                if option == 0: dx, dy = 0, maxYr - maxY
-                elif option == 1: dx, dy = 0, cyr - cy
-                elif option == 2: dx, dy = 0, minYr - minY
-                elif option == 3: dx, dy = minXr - minX, 0
-                elif option == 4: dx, dy = cxr - cx, 0
-                elif option == 5: dx, dy = maxXr - maxX, 0
-
-                log(f"→ Move FULL PATH dx={dx}, dy={dy}")
-                self.moveItems([p], dx, dy)
-
-            return
-        
         if nodes and not fullPathsFromNodes:
-            log("MODE: NODE")
             b = self.getBounds(nodes, layer)
-            log(f"Bounds NODE: {b}")
+            if not b:
+                return
+            
             minX, minY, maxX, maxY = b
             cx = (minX + maxX) / 2
             cy = (minY + maxY) / 2
+            option = self.w.options.get()
 
             for n in nodes:
                 if option == 0: dx, dy = 0, maxY - n.y
@@ -437,162 +394,78 @@ class AlignTool(object):
                 n.y += dy
             return
 
-        # COMPONENT ↔ COMPONENT
-        if len(comps) >= 2 and not paths and not anchors:
-            log("MODE: COMPONENT ↔ COMPONENT")
-
-            ref = comps[0]
-            bRef = self.getComponentBounds(ref, layer)
-            log(f"Ref bounds: {bRef}")
-
+        # MODO ESPECIAL: Componente como referencia fija vs Paths
+        if ref_component is not None and (paths or anchors):
+            log("🔥 MODO: Componente como referencia (fijo) vs Paths")
+            
+            # El componente de referencia NO se mueve
+            # Calculamos sus bounds
+            bRef = self.getComponentBounds(ref_component, layer)
+            if not bRef:
+                return
+            
             minXr, minYr, maxXr, maxYr = bRef
             cxr = (minXr + maxXr) / 2
             cyr = (minYr + maxYr) / 2
-
-            for comp in comps[1:]:
-                b = self.getComponentBounds(comp, layer)
-                log(f"Comp bounds: {b}")
-
-                minX, minY, maxX, maxY = b
-                cx = (minX + maxX) / 2
-                cy = (minY + maxY) / 2
-
-                if option == 0: dx, dy = 0, maxYr - maxY
-                elif option == 1: dx, dy = 0, cyr - cy
-                elif option == 2: dx, dy = 0, minYr - minY
-                elif option == 3: dx, dy = minXr - minX, 0
-                elif option == 4: dx, dy = cxr - cx, 0
-                elif option == 5: dx, dy = maxXr - maxX, 0
-
-                log(f"→ Move component dx={dx}, dy={dy}")
-                comp.x += dx
-                comp.y += dy
-
-            return
-
-        # DEBUG CONDITION
-        if DEBUG:
-            log("CHECK PATH ↔ COMPONENT:")
-            log(f"comps: {bool(comps)}")
-            log(f"paths/anchors: {bool(paths or anchors)}")
-            log(f"pathsAsGroup: {self.w.pathsAsGroup.get()}")
-
-        # PATH ↔ COMPONENT
-        if comps and (paths or anchors) and self.w.pathsAsGroup.get():
-
-            log("🔥 ENTER PATH ↔ COMPONENT")
-
+            
+            # Movemos los paths y anchors seleccionados
             moveItems = paths + anchors
-            ref = comps[0]
-
-            bMove = self.getBounds(moveItems, layer)
-            bRef = self.getComponentBounds(ref, layer)
-
-            log(f"Bounds MOVE: {bMove}")
-            log(f"Bounds REF: {bRef}")
-
-            minX, minY, maxX, maxY = bMove
-            minXr, minYr, maxXr, maxYr = bRef
-
-            cx = (minX + maxX) / 2
-            cy = (minY + maxY) / 2
-            cxr = (minXr + maxXr) / 2
-            cyr = (minYr + maxYr) / 2
-
-            log(f"Center MOVE: {cx}, {cy}")
-            log(f"Center REF: {cxr}, {cyr}")
-
-            if option == 0: dx, dy = 0, maxYr - maxY
-            elif option == 1: dx, dy = 0, cyr - cy
-            elif option == 2: dx, dy = 0, minYr - minY
-            elif option == 3: dx, dy = minXr - minX, 0
-            elif option == 4: dx, dy = cxr - cx, 0
-            elif option == 5: dx, dy = maxXr - maxX, 0
-
-            log(f"RESULT dx={dx}, dy={dy}")
-
-            self.moveItems(moveItems, dx, dy)
-            return
-        # ===== NEW CASE: MULTIPLE PATHS (SMART REFERENCE BY AREA) =====
-        if not nodes and not comps and len(paths) >= 2:
-
-            log("🧠 MODE: MULTI PATH SMART ALIGN")
-
-            bounds_list = []
-
-            for p in paths:
-                b = self.getBounds([p], layer)
+            
+            for item in moveItems:
+                b = self.getBounds([item], layer)
                 if not b:
                     continue
+                
+                minXi, minYi, maxXi, maxYi = b
+                cxi = (minXi + maxXi) / 2
+                cyi = (minYi + maxYi) / 2
+                option = self.w.options.get()
 
-                minX, minY, maxX, maxY = b
-                area = (maxX - minX) * (maxY - minY)
+                if option == 0: dx, dy = 0, maxYr - maxYi
+                elif option == 1: dx, dy = 0, cyr - cyi
+                elif option == 2: dx, dy = 0, minYr - minYi
+                elif option == 3: dx, dy = minXr - minXi, 0
+                elif option == 4: dx, dy = cxr - cxi, 0
+                elif option == 5: dx, dy = maxXr - maxXi, 0
 
-                bounds_list.append((p, b, area))
+                self.moveItems([item], dx, dy)
+            return
 
-            if len(bounds_list) < 2:
+        # Si tenemos ref_bounds (modo multi-master)
+        if ref_bounds:
+            minXr, minYr, maxXr, maxYr = ref_bounds
+            cxr = (minXr + maxXr) / 2
+            cyr = (minYr + maxYr) / 2
+        else:
+            # Modo normal: calcular bounds de todos los items seleccionados
+            all_items = paths + comps + anchors
+            if len(all_items) < 2:
                 return
-
-            # ordenar per àrea (gran → petit)
-            bounds_list.sort(key=lambda x: x[2], reverse=True)
-
-            ref, bRef, _ = bounds_list[0]
-
-            minXr, minYr, maxXr, maxYr = bRef
+            total = self.getBounds(all_items, layer)
+            if not total:
+                return
+            minXr, minYr, maxXr, maxYr = total
             cxr = (minXr + maxXr) / 2
             cyr = (minYr + maxYr) / 2
 
-            # tots els altres es mouen
-            for p, b, _ in bounds_list[1:]:
-
-                minX, minY, maxX, maxY = b
-                cx = (minX + maxX) / 2
-                cy = (minY + maxY) / 2
-
-                if option == 0: dx, dy = 0, maxYr - maxY
-                elif option == 1: dx, dy = 0, cyr - cy
-                elif option == 2: dx, dy = 0, minYr - minY
-                elif option == 3: dx, dy = minXr - minX, 0
-                elif option == 4: dx, dy = cxr - cx, 0
-                elif option == 5: dx, dy = maxXr - maxX, 0
-
-                log(f"→ Move PATH dx={dx}, dy={dy}")
-                self.moveItems([p], dx, dy)
-
-            return
-            
-            
-        # DEFAULT
-        log("MODE: DEFAULT")
-
-        all_items = paths + comps + anchors
-
-        if len(all_items) < 2:
-            return
-
-        total = self.getBounds(all_items, layer)
-        log(f"Bounds TOTAL: {total}")
-
-        minX, minY, maxX, maxY = total
-        cx = (minX + maxX) / 2
-        cy = (minY + maxY) / 2
-
-        for item in all_items:
+        # Mover cada item individualmente
+        for item in paths + comps + anchors:
             b = self.getBounds([item], layer)
-            log(f"Item bounds: {b}")
-
+            if not b:
+                continue
+            
             minXi, minYi, maxXi, maxYi = b
             cxi = (minXi + maxXi) / 2
             cyi = (minYi + maxYi) / 2
+            option = self.w.options.get()
 
-            if option == 0: dx, dy = 0, maxY - maxYi
-            elif option == 1: dx, dy = 0, cy - cyi
-            elif option == 2: dx, dy = 0, minY - minYi
-            elif option == 3: dx, dy = minX - minXi, 0
-            elif option == 4: dx, dy = cx - cxi, 0
-            elif option == 5: dx, dy = maxX - maxXi, 0
+            if option == 0: dx, dy = 0, maxYr - maxYi
+            elif option == 1: dx, dy = 0, cyr - cyi
+            elif option == 2: dx, dy = 0, minYr - minYi
+            elif option == 3: dx, dy = minXr - minXi, 0
+            elif option == 4: dx, dy = cxr - cxi, 0
+            elif option == 5: dx, dy = maxXr - maxXi, 0
 
-            log(f"→ Move item dx={dx}, dy={dy}")
             self.moveItems([item], dx, dy)
 
     # ========= Y POSITION =========
@@ -659,12 +532,21 @@ class AlignTool(object):
             log("Invalid Y input")
             return
 
-        for layer in font.selectedLayers:
-            if self.w.scope.get():
-                for m in font.masters:
-                    self.applyYToLayer(layer.parent.layers[m.id], y)
-            else:
-                self.applyYToLayer(layer, y)
+        # Obtener el glifo actual
+        if not font.selectedLayers:
+            return
+        
+        current_layer = font.selectedLayers[0]
+        glyph = current_layer.parent
+        
+        if self.w.scope.get() == 1:  # All masters
+            # Aplicar a todos los masters del glifo actual
+            for master in font.masters:
+                target_layer = glyph.layers[master.id]
+                if target_layer:
+                    self.applyYToLayer(target_layer, y)
+        else:  # Current master
+            self.applyYToLayer(current_layer, y)
 
         Glyphs.redraw()
 
@@ -676,8 +558,6 @@ class AlignTool(object):
             return
         
         # Define presets with their values, overshoot settings, and forced alignment mode
-        # Baseline = 0 (cero)
-        # Descenders = master.descender (valor negativo)
         presets = [
             ("Baseline", 0, False, None, "down"),
             ("Baseline Overshoots", 0, True, "south", "down"),
@@ -693,21 +573,32 @@ class AlignTool(object):
         
         preset_name, value, apply_overshoot, direction, force_mode = presets[preset_index - 1]
         
-        
-        
         # ===== AUTO OVERSHOOT (MATCH EXACT METRIC ZONE) =====
         overshoot_value = 0
 
         try:
-            zones = getattr(master, "alignmentZones", [])
+            # Intentar con alignmentZones (API más nueva)
+            zones = []
+            if hasattr(master, 'alignmentZones'):
+                zones = master.alignmentZones
+            elif hasattr(master, 'blueZones'):
+                zones = master.blueZones
 
             target = value  # baseline, xHeight, etc.
 
             for z in zones:
-                # match exacte amb la mètrica
-                if abs(z.position - target) < 1:  # tolerància mínima
-                    overshoot_value = abs(z.size)
-                    break
+                try:
+                    # Manejar diferentes tipos de objetos zone
+                    if hasattr(z, 'position') and hasattr(z, 'size'):
+                        if abs(z.position - target) < 1:
+                            overshoot_value = abs(z.size)
+                            break
+                    elif isinstance(z, (list, tuple)) and len(z) >= 2:
+                        if abs(z[0] - target) < 1:
+                            overshoot_value = abs(z[1])
+                            break
+                except:
+                    continue
 
             # fallback
             if overshoot_value == 0:
@@ -719,31 +610,163 @@ class AlignTool(object):
 
         self.w.overshootValue.set(str(int(overshoot_value)))
         
-        
-        
-        
         self.w.yInput.set(str(value))
         
-        # Apply the Y position with overshoot if needed
+        # Obtener el glifo actual
         font = Glyphs.font
-        for layer in font.selectedLayers:
-            if self.w.scope.get():
-                for m in font.masters:
-                    self.applyYToLayer(layer.parent.layers[m.id], value, apply_overshoot, direction, force_mode)
-            else:
-                self.applyYToLayer(layer, value, apply_overshoot, direction, force_mode)
+        if not font.selectedLayers:
+            return
+        
+        current_layer = font.selectedLayers[0]
+        glyph = current_layer.parent
+        
+        if self.w.scope.get() == 1:  # All masters
+            # Aplicar a todos los masters del glifo actual
+            for master in font.masters:
+                target_layer = glyph.layers[master.id]
+                if target_layer:
+                    self.applyYToLayer(target_layer, value, apply_overshoot, direction, force_mode)
+        else:  # Current master
+            self.applyYToLayer(current_layer, value, apply_overshoot, direction, force_mode)
         
         Glyphs.redraw()
 
-    # ========= RUN =========
+    # ========= RUN ALIGN =========
 
     def align(self, sender):
         font = Glyphs.font
-        for layer in font.selectedLayers:
-            self.alignLayer(layer)
+        
+        if not font.selectedLayers:
+            return
+        
+        current_layer = font.selectedLayers[0]
+        glyph = current_layer.parent
+        
+        if self.w.scope.get() == 1:  # "All masters" mode
+            log("=== ALL MASTERS MODE ===")
+            
+            # Detectar qué tipo de selección tenemos en el layer actual
+            ref_nodes, ref_fullPaths = self.getSelectionSmart(current_layer)
+            ref_paths_selected = [p for p in current_layer.paths if p.selected]
+            ref_paths = []
+            for p in ref_paths_selected + ref_fullPaths:
+                if p not in ref_paths:
+                    ref_paths.append(p)
+            ref_comps = [c for c in current_layer.components if c.selected]
+            ref_anchors = [a for a in current_layer.anchors if a.selected]
+            
+            # MODO 1: Componente como referencia (para alinear paths contra componente)
+            if ref_comps and (ref_paths or ref_anchors) and self.w.pathsAsGroup.get():
+                log("🔥 ALL MASTERS: Componente como referencia fija")
+                # Tomamos el primer componente como referencia
+                ref_comp = ref_comps[0]
+                
+                # Para cada master
+                for master in font.masters:
+                    target_layer = glyph.layers[master.id]
+                    if target_layer:
+                        # Encontrar el componente correspondiente en este master
+                        target_comp = None
+                        for comp in target_layer.components:
+                            if comp.componentName == ref_comp.componentName:
+                                target_comp = comp
+                                break
+                        
+                        if target_comp:
+                            # Alinear paths y anchors contra este componente
+                            self.alignLayer(target_layer, ref_component=target_comp)
+                        else:
+                            log(f"No se encontró componente {ref_comp.componentName} en master {master.name}")
+                
+                Glyphs.redraw()
+                return
+            
+            # MODO 2: Nodos seleccionados
+            if ref_nodes and not ref_fullPaths:
+                log("ALL MASTERS: Modo Nodos")
+                # Calcular bounds de referencia UNA VEZ
+                b_ref = self.getBounds(ref_nodes, current_layer)
+                if not b_ref:
+                    return
+                
+                # Para cada master, encontrar los nodos correspondientes
+                for master in font.masters:
+                    target_layer = glyph.layers[master.id]
+                    if target_layer:
+                        # Encontrar nodos correspondientes en este master
+                        target_nodes = []
+                        source_paths = list(current_layer.paths)
+                        target_paths = list(target_layer.paths)
+                        
+                        for source_node in ref_nodes:
+                            # Encontrar índice del path y del nodo
+                            for path_idx, path in enumerate(source_paths):
+                                for node_idx, node in enumerate(path.nodes):
+                                    if node is source_node:
+                                        if path_idx < len(target_paths):
+                                            target_path = target_paths[path_idx]
+                                            if node_idx < len(target_path.nodes):
+                                                target_nodes.append(target_path.nodes[node_idx])
+                                        break
+                                else:
+                                    continue
+                                break
+                        
+                        # Crear un layer virtual con solo esos nodos para alinear
+                        if target_nodes:
+                            # Guardar posiciones originales
+                            original_positions = [(n.x, n.y) for n in target_nodes]
+                            
+                            # Aplicar alineación usando los bounds de referencia
+                            # Calculamos bounds de los nodos en el target
+                            target_bounds = self.getBounds(target_nodes, target_layer)
+                            if target_bounds:
+                                minXt, minYt, maxXt, maxYt = target_bounds
+                                minXr, minYr, maxXr, maxYr = b_ref
+                                cxr = (minXr + maxXr) / 2
+                                cyr = (minYr + maxYr) / 2
+                                cxt = (minXt + maxXt) / 2
+                                cyt = (minYt + maxYt) / 2
+                                option = self.w.options.get()
+                                
+                                for n in target_nodes:
+                                    if option == 0: dx, dy = 0, maxYr - maxYt
+                                    elif option == 1: dx, dy = 0, cyr - cyt
+                                    elif option == 2: dx, dy = 0, minYr - minYt
+                                    elif option == 3: dx, dy = minXr - minXt, 0
+                                    elif option == 4: dx, dy = cxr - cxt, 0
+                                    elif option == 5: dx, dy = maxXr - maxXt, 0
+                                    n.x += dx
+                                    n.y += dy
+                
+                # También mover los nodos en el layer actual
+                self.alignLayer(current_layer, ref_bounds=b_ref)
+                Glyphs.redraw()
+                return
+            
+            # MODO 3: Paths, componentes o anchors normales
+            ref_items = ref_paths + ref_comps + ref_anchors
+            if len(ref_items) < 2:
+                log("ALL MASTERS: No hay suficientes items seleccionados para alinear")
+                return
+            
+            ref_bounds = self.getBounds(ref_items, current_layer)
+            if not ref_bounds:
+                return
+            
+            # Aplicar a todos los masters del glifo
+            for master in font.masters:
+                target_layer = glyph.layers[master.id]
+                if target_layer:
+                    self.alignLayer(target_layer, ref_bounds=ref_bounds)
+        
+        else:  # "Current" mode
+            log("=== CURRENT MASTER MODE ===")
+            for layer in font.selectedLayers:
+                self.alignLayer(layer)
+        
         Glyphs.redraw()
-        
-        
 
 
+# Iniciar la herramienta
 AlignTool()
