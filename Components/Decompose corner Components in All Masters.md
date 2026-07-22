@@ -21,3 +21,8 @@ This tool can make structural or irreversible changes. Save the font or work on 
 ## License
 
 Apache 2.0
+
+## Safety improvements
+
+- Requires an explicit glyph selection and processes those glyphs across their layers.
+- Running the script with no selection no longer changes the entire font accidentally.

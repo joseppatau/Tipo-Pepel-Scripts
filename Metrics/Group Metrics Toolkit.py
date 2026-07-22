@@ -6,10 +6,8 @@
 # License: Apache2 Kern Group Update metrics
 
 import GlyphsApp
+from GlyphsApp import Glyphs
 from vanilla import FloatingWindow, EditText, TextBox, RadioGroup, Button, Tabs
-
-font = Glyphs.font
-
 
 class KernGroupTools(object):
 
@@ -85,6 +83,9 @@ class KernGroupTools(object):
 
     def updateMetrics(self, sender):
 
+        font = Glyphs.font
+        if not font:
+            return
         master = font.selectedFontMaster
         tab = self.w.tabs[0]
 
@@ -132,40 +133,39 @@ class KernGroupTools(object):
         # =====================================================
 
         font.disableUpdateInterface()
+        try:
+            for g in font.glyphs:
 
-        for g in font.glyphs:
+                layer = g.layers[master.id]
+                if not layer:
+                    continue
 
-            layer = g.layers[master.id]
-            if not layer:
-                continue
+                changeLSB = lsbValue is not None and g.leftKerningGroup == groupName
+                changeRSB = rsbValue is not None and g.rightKerningGroup == groupName
+                if not changeLSB and not changeRSB:
+                    continue
 
-            changed = False
-
-            if lsbValue is not None and g.leftKerningGroup == groupName:
                 g.beginUndo()
-                if mode == 0:
-                    layer.LSB += lsbValue
-                elif mode == 1:
-                    layer.LSB -= lsbValue
-                elif mode == 2:
-                    layer.LSB = lsbValue
-                changed = True
+                try:
+                    if changeLSB:
+                        if mode == 0:
+                            layer.LSB += lsbValue
+                        elif mode == 1:
+                            layer.LSB -= lsbValue
+                        elif mode == 2:
+                            layer.LSB = lsbValue
 
-            if rsbValue is not None and g.rightKerningGroup == groupName:
-                if not changed:
-                    g.beginUndo()
-                if mode == 0:
-                    layer.RSB += rsbValue
-                elif mode == 1:
-                    layer.RSB -= rsbValue
-                elif mode == 2:
-                    layer.RSB = rsbValue
-                changed = True
-
-            if changed:
-                g.endUndo()
-
-        font.enableUpdateInterface()
+                    if changeRSB:
+                        if mode == 0:
+                            layer.RSB += rsbValue
+                        elif mode == 1:
+                            layer.RSB -= rsbValue
+                        elif mode == 2:
+                            layer.RSB = rsbValue
+                finally:
+                    g.endUndo()
+        finally:
+            font.enableUpdateInterface()
 
     # =====================================================
     # TAB 2 — VIEW MEMBERS
@@ -173,6 +173,9 @@ class KernGroupTools(object):
 
     def viewMembers(self, sender):
 
+        font = Glyphs.font
+        if not font:
+            return
         tab = self.w.tabs[1]
         groupInput = tab.inputGroup.get().strip()
         if not groupInput:
@@ -212,6 +215,9 @@ class KernGroupTools(object):
 
     def searchMetricKeys(self, sender):
 
+        font = Glyphs.font
+        if not font:
+            return
         tab = self.w.tabs[2]
         baseGlyphName = tab.inputGlyph.get().strip()
 

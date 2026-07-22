@@ -5,7 +5,7 @@ from GlyphsApp import Glyphs, GSGlyph, GSComponent
 import copy
 
 font = Glyphs.font
-selectedLayers = font.selectedLayers
+selectedLayers = list(font.selectedLayers) if font else []
 
 if not selectedLayers:
     print("No glyphs selected.")
@@ -13,84 +13,91 @@ else:
     created = []
     skipped = []
 
+    sourceGlyphs = list(font.glyphs)
+    selectedGlyphs = []
+    seenGlyphNames = set()
+    for selectedLayer in selectedLayers:
+        selectedGlyph = selectedLayer.parent
+        if selectedGlyph.name not in seenGlyphNames:
+            selectedGlyphs.append(selectedGlyph)
+            seenGlyphNames.add(selectedGlyph.name)
+
     font.disableUpdateInterface()
+    try:
+        for selectedGlyph in selectedGlyphs:
+            glyphName = selectedGlyph.name
 
-    for layer in selectedLayers:
-        selectedGlyph = layer.parent
-        glyphName = selectedGlyph.name
-
-        if "." not in glyphName:
-            print(f"Skipping {glyphName}: no suffix found.")
-            continue
-
-        parts = glyphName.split(".")
-        baseName = parts[0]
-        suffix = "." + parts[1]   # only first suffix
-
-        print(f"\nProcessing {glyphName}")
-        print(f"Base: {baseName}")
-        print(f"Suffix: {suffix}")
-
-        baseGlyph = font.glyphs[baseName]
-        if not baseGlyph:
-            print(f"Base glyph {baseName} not found.")
-            continue
-
-        for glyph in font.glyphs:
-            if glyph == selectedGlyph:
+            if "." not in glyphName:
+                print(f"Skipping {glyphName}: no suffix found.")
                 continue
 
-            usesBase = False
+            baseName, suffixPart = glyphName.split(".", 1)
+            suffix = "." + suffixPart
 
-            for layer in glyph.layers:
-                for shape in layer.shapes:
-                    if isinstance(shape, GSComponent):
-                        if shape.componentName == baseName:
-                            usesBase = True
-                            break
-                if usesBase:
-                    break
+            print(f"\nProcessing {glyphName}")
+            print(f"Base: {baseName}")
+            print(f"Suffix: {suffix}")
 
-            if usesBase:
-                newGlyphName = glyph.name + suffix
+            baseGlyph = font.glyphs[baseName]
+            if not baseGlyph:
+                print(f"Base glyph {baseName} not found.")
+                continue
 
-                if font.glyphs[newGlyphName]:
-                    skipped.append(newGlyphName)
-                    print(f"SKIP: {newGlyphName} already exists")
+            for glyph in sourceGlyphs:
+                if glyph == selectedGlyph:
                     continue
 
-                newGlyph = GSGlyph(newGlyphName)
-                newGlyph.export = True
-                newGlyph.unicode = None
+                usesBase = False
 
-                font.glyphs.append(newGlyph)
+                for layer in glyph.layers:
+                    for shape in layer.shapes:
+                        if isinstance(shape, GSComponent):
+                            if shape.componentName == baseName:
+                                usesBase = True
+                                break
+                    if usesBase:
+                        break
 
-                for master in font.masters:
-                    sourceLayer = glyph.layers[master.id]
-                    targetLayer = newGlyph.layers[master.id]
+                if usesBase:
+                    newGlyphName = glyph.name + suffix
 
-                    targetLayer.width = sourceLayer.width
-                    targetLayer.shapes = []
-                    targetLayer.anchors = []
+                    if font.glyphs[newGlyphName]:
+                        skipped.append(newGlyphName)
+                        print(f"SKIP: {newGlyphName} already exists")
+                        continue
 
-                    # copy shapes
-                    for shape in sourceLayer.shapes:
-                        newShape = copy.copy(shape)
+                    newGlyph = GSGlyph(newGlyphName)
+                    newGlyph.export = True
+                    newGlyph.unicode = None
 
-                        if isinstance(newShape, GSComponent):
-                            if newShape.componentName == baseName:
-                                newShape.componentName = glyphName
+                    font.glyphs.append(newGlyph)
 
-                        targetLayer.shapes.append(newShape)
+                    for master in font.masters:
+                        sourceLayer = glyph.layers[master.id]
+                        targetLayer = newGlyph.layers[master.id]
 
-                    # copy anchors
-                    for anchor in sourceLayer.anchors:
-                        targetLayer.anchors.append(copy.copy(anchor))
+                        targetLayer.width = sourceLayer.width
+                        targetLayer.shapes = []
+                        targetLayer.anchors = []
 
-                created.append(newGlyphName)
-                print(f"CREATED: {newGlyphName}")
+                        # copy shapes
+                        for shape in sourceLayer.shapes:
+                            newShape = copy.copy(shape)
 
-    font.enableUpdateInterface()
+                            if isinstance(newShape, GSComponent):
+                                if newShape.componentName == baseName:
+                                    newShape.componentName = glyphName
+
+                            targetLayer.shapes.append(newShape)
+
+                        # copy anchors
+                        for anchor in sourceLayer.anchors:
+                            targetLayer.anchors.append(copy.copy(anchor))
+
+                    created.append(newGlyphName)
+                    print(f"CREATED: {newGlyphName}")
+    finally:
+        font.enableUpdateInterface()
 
     print("\n=== DONE ===")
     print(f"Created: {len(created)}")

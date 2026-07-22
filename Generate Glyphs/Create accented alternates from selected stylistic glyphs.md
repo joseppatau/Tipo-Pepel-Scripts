@@ -17,3 +17,8 @@ A GlyphsApp utility for create accented alternates from selected stylistic glyph
 ## License
 
 Apache 2.0
+
+## Safety improvements
+
+- Uses a stable snapshot of the source glyph list, preventing newly created glyphs from being processed recursively.
+- Preserves complete multi-part suffixes and always restores the Glyphs interface after an error.

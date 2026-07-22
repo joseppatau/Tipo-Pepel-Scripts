@@ -34,7 +34,7 @@ class DeleteNodesAllMasters(object):
     def deleteNodes(self, sender):
 
         font = Glyphs.font
-        if not font:
+        if not font or not font.selectedLayers:
             return
 
         layer = font.selectedLayers[0]
@@ -46,21 +46,24 @@ class DeleteNodesAllMasters(object):
             Glyphs.showNotification("Delete Nodes", "No nodes selected.")
             return
 
+        masterLayers = [candidate for candidate in glyph.layers if candidate.isMasterLayer]
+        incompatible = self.incompatibleLayers(layer, masterLayers, selectedIndexes)
+        if incompatible:
+            Glyphs.showNotification(
+                "Delete Nodes",
+                "Canceled: incompatible structure in %s." % ", ".join(incompatible)
+            )
+            return
+
         font.disableUpdateInterface()
         glyph.beginUndo()
-
-        for masterLayer in glyph.layers:
-            if not masterLayer.isMasterLayer:
-                continue
-
-            for pathIndex, nodeIndex in sorted(selectedIndexes, reverse=True):
-                if pathIndex < len(masterLayer.paths):
-                    path = masterLayer.paths[pathIndex]
-                    if nodeIndex < len(path.nodes):
-                        del path.nodes[nodeIndex]
-
-        glyph.endUndo()
-        font.enableUpdateInterface()
+        try:
+            for masterLayer in masterLayers:
+                for pathIndex, nodeIndex in sorted(selectedIndexes, reverse=True):
+                    del masterLayer.paths[pathIndex].nodes[nodeIndex]
+        finally:
+            glyph.endUndo()
+            font.enableUpdateInterface()
 
         Glyphs.showNotification("Delete Nodes", "Nodes deleted in all masters.")
 
@@ -71,7 +74,7 @@ class DeleteNodesAllMasters(object):
     def deleteHandles(self, sender):
 
         font = Glyphs.font
-        if not font:
+        if not font or not font.selectedLayers:
             return
 
         layer = font.selectedLayers[0]
@@ -83,51 +86,67 @@ class DeleteNodesAllMasters(object):
             Glyphs.showNotification("Delete Handles", "No nodes selected.")
             return
 
+        masterLayers = [candidate for candidate in glyph.layers if candidate.isMasterLayer]
+        incompatible = self.incompatibleLayers(layer, masterLayers, selectedIndexes)
+        if incompatible:
+            Glyphs.showNotification(
+                "Delete Handles",
+                "Canceled: incompatible structure in %s." % ", ".join(incompatible)
+            )
+            return
+
         font.disableUpdateInterface()
         glyph.beginUndo()
+        try:
+            for masterLayer in masterLayers:
+                for pathIndex, nodeIndex in selectedIndexes:
+                    path = masterLayer.paths[pathIndex]
 
-        for masterLayer in glyph.layers:
-            if not masterLayer.isMasterLayer:
-                continue
-
-            for pathIndex, nodeIndex in selectedIndexes:
-                if pathIndex >= len(masterLayer.paths):
-                    continue
-
-                path = masterLayer.paths[pathIndex]
-                if nodeIndex >= len(path.nodes):
-                    continue
-
-                node = path.nodes[nodeIndex]
+                    node = path.nodes[nodeIndex]
 
                 # Only curve nodes can have handles
-                if node.type != GSCURVE:
-                    continue
+                    if node.type != GSCURVE:
+                        continue
 
-                nodes = path.nodes
-                count = len(nodes)
+                    nodes = path.nodes
+                    count = len(nodes)
 
-                prevIndex = (nodeIndex - 1) % count
-                nextIndex = (nodeIndex + 1) % count
+                    prevIndex = (nodeIndex - 1) % count
+                    nextIndex = (nodeIndex + 1) % count
 
-                toDelete = []
+                    toDelete = []
 
                 # Previous off-curve
-                if nodes[prevIndex].type == GSOFFCURVE:
-                    toDelete.append(prevIndex)
+                    if nodes[prevIndex].type == GSOFFCURVE:
+                        toDelete.append(prevIndex)
 
                 # Next off-curve
-                if nodes[nextIndex].type == GSOFFCURVE:
-                    toDelete.append(nextIndex)
+                    if nodes[nextIndex].type == GSOFFCURVE:
+                        toDelete.append(nextIndex)
 
                 # Delete in reverse order
-                for i in sorted(toDelete, reverse=True):
-                    del path.nodes[i]
-
-        glyph.endUndo()
-        font.enableUpdateInterface()
+                    for i in sorted(toDelete, reverse=True):
+                        del path.nodes[i]
+        finally:
+            glyph.endUndo()
+            font.enableUpdateInterface()
 
         Glyphs.showNotification("Delete Handles", "Handles removed in all masters.")
+
+    def incompatibleLayers(self, sourceLayer, layers, selectedIndexes):
+        """Return master names whose path/node structure differs from the source."""
+        incompatible = []
+        for layer in layers:
+            valid = len(layer.paths) == len(sourceLayer.paths)
+            if valid:
+                valid = all(
+                    len(layer.paths[pathIndex].nodes)
+                    == len(sourceLayer.paths[pathIndex].nodes)
+                    for pathIndex, nodeIndex in selectedIndexes
+                )
+            if not valid:
+                incompatible.append(layer.name)
+        return incompatible
 
     # -----------------------------------------------------
 

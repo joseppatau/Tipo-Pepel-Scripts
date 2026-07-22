@@ -18,3 +18,8 @@ A GlyphsApp utility for import lsb/rsb from another font all masters.
 ## License
 
 Apache 2.0
+
+## Safety improvements
+
+- Source and destination masters are paired explicitly instead of assuming that their internal IDs match across fonts.
+- The operation stops when the two fonts have different master counts.

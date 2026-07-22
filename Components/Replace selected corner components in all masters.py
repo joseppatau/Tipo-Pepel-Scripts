@@ -24,6 +24,8 @@ class CornerTool(object):
 
     def __init__(self):
         self.font = Glyphs.font
+        if not self.font:
+            raise RuntimeError("No font open.")
         self.corners = getAllCornerComponents(self.font)
         self.cachedSelection = [] 
         
@@ -69,15 +71,26 @@ class CornerTool(object):
     def find_ref(self, glyph, pIdx, nIdx):
         for master in self.font.masters:
             l = glyph.layers[master.id]
-            shapes = getattr(l, 'shapes', l.paths)
-            if pIdx < len(shapes):
-                node = shapes[pIdx].nodes[nIdx]
+            node = self.nodeForRef(l, pIdx, nIdx)
+            if node is not None:
                 for h in l.hints:
                     if h.type == CORNER and h.originNode == node:
                         return h.scale.x, h.scale.y, h.options
         return None
 
+    def nodeForRef(self, layer, shapeIndex, nodeIndex):
+        shapes = getattr(layer, 'shapes', layer.paths)
+        if shapeIndex >= len(shapes):
+            return None
+        shape = shapes[shapeIndex]
+        if not hasattr(shape, "nodes") or nodeIndex >= len(shape.nodes):
+            return None
+        return shape.nodes[nodeIndex]
+
     def apply(self, sender):
+        if not self.font.selectedLayers:
+            self.w.status.set("Select a layer and one or more nodes.")
+            return
         layer = self.font.selectedLayers[0]
         nodeRefs = extractNodeRefs(layer)
         if not nodeRefs or not self.w.list.getSelection(): return
@@ -88,42 +101,51 @@ class CornerTool(object):
             ui_y = abs(float(self.w.scale_y.get()) / 100.0)
         except: ui_x, ui_y = 1.0, 1.0
 
+        targetLayers = self.getTargetLayers(layer)
+        if any(
+            self.nodeForRef(curr_layer, pIdx, nIdx) is None
+            for curr_layer in targetLayers
+            for pIdx, nIdx in nodeRefs
+        ):
+            self.w.status.set("Canceled: masters have incompatible structures.")
+            return
+
         self.font.disableUpdateInterface()
-        for curr_layer in self.getTargetLayers(layer):
-            shapes = getattr(curr_layer, 'shapes', curr_layer.paths)
-            for (pIdx, nIdx) in nodeRefs:
-                if pIdx >= len(shapes): continue
-                node = shapes[pIdx].nodes[nIdx]
+        try:
+            for curr_layer in targetLayers:
+                for (pIdx, nIdx) in nodeRefs:
+                    node = self.nodeForRef(curr_layer, pIdx, nIdx)
                 
                 # Buscar info prèvia
-                ref_info = self.find_ref(layer.parent, pIdx, nIdx)
+                    ref_info = self.find_ref(layer.parent, pIdx, nIdx)
                 
                 # Netejar vells
-                for h in [h for h in list(curr_layer.hints) if h.type == CORNER and h.originNode == node]:
-                    curr_layer.removeHint_(h)
+                    for h in [h for h in list(curr_layer.hints) if h.type == CORNER and h.originNode == node]:
+                        curr_layer.removeHint_(h)
 
-                for name in selected_names:
-                    new_h = GSHint()
-                    new_h.type = CORNER
-                    new_h.setName_(name)
-                    new_h.originNode = node
+                    for name in selected_names:
+                        new_h = GSHint()
+                        new_h.type = CORNER
+                        new_h.setName_(name)
+                        new_h.originNode = node
                     
                     # LÒGICA DE PRIORITATS:
                     # 1. Si tenim referència d'altre master, heretem el signe (FLIP) i les opcions (DIRECCIÓ)
-                    sig_x, sig_y, opts = (1, 1, 0)
-                    if ref_info:
-                        sig_x = -1 if ref_info[0] < 0 else 1
-                        sig_y = -1 if ref_info[1] < 0 else 1
-                        opts = ref_info[2]
+                        sig_x, sig_y, opts = (1, 1, 0)
+                        if ref_info:
+                            sig_x = -1 if ref_info[0] < 0 else 1
+                            sig_y = -1 if ref_info[1] < 0 else 1
+                            opts = ref_info[2]
                     
                     # 2. Determinar mida numèrica (Scale)
-                    val_x, val_y = (ui_x, ui_y) if self.w.customScale.get() else (1.0, 1.0)
+                        val_x, val_y = (ui_x, ui_y) if self.w.customScale.get() else (1.0, 1.0)
                     
-                    new_h.scale = (val_x * sig_x, val_y * sig_y)
-                    new_h.options = opts
-                    curr_layer.addHint_(new_h)
-        
-        self.font.enableUpdateInterface()
+                        new_h.scale = (val_x * sig_x, val_y * sig_y)
+                        new_h.options = opts
+                        curr_layer.addHint_(new_h)
+            self.w.status.set("Applied successfully.")
+        finally:
+            self.font.enableUpdateInterface()
 
     # --- Resta de mètodes (Delete, Flip, Align, etc.) es mantenen igual ---
     def manualRefresh(self, sender): self.cachedSelection = []; self.updateSelection_(None)

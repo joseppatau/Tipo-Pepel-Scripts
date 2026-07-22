@@ -60,12 +60,12 @@ class ImportLSBRSB:
         else:
             Message(f"✅ Completado\n\n{msg}")
     
-    def import_metrics_for_glyph(self, source_glyph, target_glyph, master_ids):
+    def import_metrics_for_glyph(self, source_glyph, target_glyph, master_pairs):
         """Importa LSB y RSB de un glifo origen a uno destino"""
         success = True
-        for master_id in master_ids:
-            source_layer = source_glyph.layers[master_id]
-            target_layer = target_glyph.layers[master_id]
+        for source_master, target_master in master_pairs:
+            source_layer = source_glyph.layers[source_master.id]
+            target_layer = target_glyph.layers[target_master.id]
             
             if source_layer and target_layer:
                 target_layer.LSB = source_layer.LSB
@@ -95,8 +95,9 @@ class ImportLSBRSB:
             )
             return
         
-        # Obtener IDs de masters
-        master_ids = [master.id for master in target_font.masters]
+        # Els IDs de màster són propis de cada font. Els emparellem per ordre,
+        # després d'haver comprovat que totes dues fonts tenen el mateix nombre.
+        master_pairs = list(zip(source_font.masters, target_font.masters))
         
         # Determinar alcance
         scope = self.w.scopeRadio.get()
@@ -120,11 +121,11 @@ class ImportLSBRSB:
             # Importar métricas
             target_glyph.beginUndo()
             try:
-                if self.import_metrics_for_glyph(source_glyph, target_glyph, master_ids):
+                if self.import_metrics_for_glyph(source_glyph, target_glyph, master_pairs):
                     target_glyph.endUndo()
                     self.show_message(
                         f"LSB y RSB importados para '{target_glyph.name}'.\n\n"
-                        f"{len(master_ids)} master(s) actualizados."
+                        f"{len(master_pairs)} master(s) actualizados."
                     )
                 else:
                     target_glyph.endUndo()
@@ -157,7 +158,7 @@ class ImportLSBRSB:
                 if source_glyph and target_glyph:
                     target_glyph.beginUndo()
                     try:
-                        if self.import_metrics_for_glyph(source_glyph, target_glyph, master_ids):
+                        if self.import_metrics_for_glyph(source_glyph, target_glyph, master_pairs):
                             imported_count += 1
                         else:
                             failed_count += 1
@@ -171,7 +172,7 @@ class ImportLSBRSB:
                 f"Importación completada.\n\n"
                 f"✓ Correctos: {imported_count} glifos\n"
                 f"✗ Fallos: {failed_count} glifos\n\n"
-                f"{len(master_ids)} master(s) actualizados por glifo."
+                f"{len(master_pairs)} master(s) actualizados por glifo."
             )
 
 

@@ -18,3 +18,8 @@ A GlyphsApp utility for corner tool pro.
 ## License
 
 Apache 2.0
+
+## Safety improvements
+
+- Validates every target shape and node before changing corner hints across masters.
+- Restores the Glyphs interface even if an operation fails.

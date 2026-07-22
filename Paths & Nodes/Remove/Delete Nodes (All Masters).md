@@ -65,3 +65,8 @@ Apache2
 ## Support the author
 
 If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
+
+## Safety improvements
+
+- Verifies compatible path and node counts before applying selected node indexes to other masters.
+- Cancels the operation instead of modifying only part of an incompatible glyph.

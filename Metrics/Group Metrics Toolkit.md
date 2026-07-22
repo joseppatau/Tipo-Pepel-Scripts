@@ -92,3 +92,8 @@ Helps track dependencies and spacing relationships.
 ## Support the author
 
 If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
+
+## Safety improvements
+
+- Resolves the active font when each action runs, so switching documents does not leave a stale font reference.
+- Balances Undo operations and restores the interface with `try/finally`.
