@@ -199,27 +199,52 @@ class KingSubditKerningEngine:
         )
         main.kernButton.getNSButton().setAttributedTitle_(kern_title)
 
-
-        main.deleteKernButton = vanilla.Button((250, y-3, 90, 24), "Delete Kern", callback=self.deleteTabKern)
-
         main.closeTabsButton = vanilla.Button((400, y-33, 24, 24), "X", 
         callback=self.closeAllTabs)
-        
-        main.DeleteHashButton = vanilla.Button((390, y-3, 34, 24), "#X", 
-                callback=self.deleteHashBlocksCallback)
-        
-        main.deleteHashButton = vanilla.Button((345, y-3, 40, 24), "🗑️#", callback=self.deleteKernInHashBlocks)
+
+        y += 30
+
+        main.preserveExisting = vanilla.CheckBox(
+            (10, y+2, 135, 20),
+            "Preserve existing",
+            value=False,
+            sizeStyle="small"
+        )
+
+        main.hideKernButton = vanilla.Button(
+            (150, y-3, 95, 24),
+            "Hide kern Tab",
+            callback=self.hideExistingKerningInTab
+        )
+
+        main.deleteKernButton = vanilla.Button(
+            (250, y-3, 90, 24),
+            "Delete Kern",
+            callback=self.deleteTabKern
+        )
+
+        main.deleteHashButton = vanilla.Button(
+            (345, y-3, 40, 24),
+            "🗑️#",
+            callback=self.deleteKernInHashBlocks
+        )
+
+        main.DeleteHashButton = vanilla.Button(
+            (390, y-3, 34, 24),
+            "#X",
+            callback=self.deleteHashBlocksCallback
+        )
 
         y += 30
 
         main.list = vanilla.List(
-            (10, y, -10, 290),
+            (10, y, -10, 260),
             self.displayList(),
             selectionCallback=self.loadSet,
             doubleClickCallback=self.generateFromSelection
         )
 
-        y += 300
+        y += 270
 
         main.loadButton = vanilla.Button((10, 400, 80, 25), "Load", callback=self.loadJSON)
         main.saveButton = vanilla.Button((100, 400, 80, 25), "Save", callback=self.saveJSON)
@@ -900,6 +925,42 @@ class KingSubditKerningEngine:
                 if rk in rk_dict:
                     return True
         return False
+
+    def _kerning_debug_info(self, font, master_id, left_name, right_name):
+        info = {
+            "left_keys": [],
+            "right_keys": [],
+            "matches": [],
+            "missing_glyph": False,
+        }
+
+        if left_name not in font.glyphs or right_name not in font.glyphs:
+            info["missing_glyph"] = True
+            return info
+
+        left_glyph = font.glyphs[left_name]
+        right_glyph = font.glyphs[right_name]
+        kerning_dict = font.kerning.get(master_id, {})
+
+        left_keys = [left_name]
+        right_keys = [right_name]
+
+        if left_glyph.rightKerningGroup:
+            left_keys.append(f"@MMK_L_{left_glyph.rightKerningGroup}")
+
+        if right_glyph.leftKerningGroup:
+            right_keys.append(f"@MMK_R_{right_glyph.leftKerningGroup}")
+
+        info["left_keys"] = left_keys
+        info["right_keys"] = right_keys
+
+        for lk in left_keys:
+            rk_dict = kerning_dict.get(lk, {})
+            for rk in right_keys:
+                if rk in rk_dict:
+                    info["matches"].append((lk, rk, rk_dict.get(rk)))
+
+        return info
     
     # -----------------------------
     # FUNCIÓN: ELIMINAR KERNING EN BLOQUES #
@@ -1593,27 +1654,47 @@ class KingSubditKerningEngine:
         tab = font.currentTab
         pairs = []
         seen = set()
+        debug_rows = []
 
         if not tab:
             return pairs
 
-        for layer in tab.layers:
-            if not layer or not layer.parent or layer.parent.name == "space":
+        layers = tab.layers or []
+
+        for i in range(len(layers) - 1):
+            left_layer = layers[i]
+            right_layer = layers[i + 1]
+
+            if not left_layer or not right_layer:
                 continue
 
-            if hasattr(layer, "nextKerning"):
-                L = layer.parent.name
-                R = layer.nextKerning.parent.name if layer.nextKerning else None
-            else:
+            if not left_layer.parent or not right_layer.parent:
                 continue
 
-            if not R or R == "space":
+            L = left_layer.parent.name
+            R = right_layer.parent.name
+
+            if len(debug_rows) < 40:
+                debug_rows.append((L, R))
+
+            if L == "space" or R == "space":
+                continue
+
+            if not L or not R:
                 continue
 
             pair = (L, R)
             if pair not in seen:
                 pairs.append(pair)
                 seen.add(pair)
+
+        print("\n🔎 _getPairsFromTab debug")
+        print("   Method: consecutive tab.layers")
+        print(f"   Tab layers: {len(layers)}")
+        print(f"   Raw layer links sampled: {len(debug_rows)}")
+        for index, (left, right) in enumerate(debug_rows, 1):
+            print(f"   {index:02d}. /{left}/ -> /{right}/")
+        print(f"   Unique non-space pairs returned: {len(pairs)}")
 
         return pairs
     
@@ -1939,6 +2020,90 @@ class KingSubditKerningEngine:
     
     
     # -----------------------------
+    # FUNCIÓN: HIDE EXISTING KERNING IN TAB
+    # -----------------------------
+    
+    def hideExistingKerningInTab(self, sender=None):
+        font = Glyphs.font
+        if not font:
+            print("❌ No font open")
+            return
+
+        tab = font.currentTab
+        if not tab:
+            print("❌ No tab open")
+            return
+
+        master_id = font.selectedFontMaster.id
+        pairs = self._getPairsFromTab()
+
+        print("\n" + "=" * 80)
+        print("🙈 DEBUG HIDE KERN TAB")
+        print("=" * 80)
+        print(f"Font: {font.familyName if hasattr(font, 'familyName') else font}")
+        print(f"Master ID: {master_id}")
+        print(f"Tab has layers: {len(tab.layers) if tab.layers else 0}")
+        try:
+            tab_text = tab.text or ""
+            print(f"Tab text length: {len(tab_text)}")
+            print(f"Tab text preview: {repr(tab_text[:300])}")
+        except Exception as e:
+            print(f"Could not read tab.text: {e}")
+        print(f"Pairs detected by _getPairsFromTab(): {len(pairs)}")
+
+        if not pairs:
+            print("⚠️ No kerning pairs found in current tab")
+            print("=" * 80)
+            return
+
+        hidden = []
+        visible = []
+
+        for index, (left, right) in enumerate(pairs, 1):
+            debug = self._kerning_debug_info(font, master_id, left, right)
+            has_kerning = bool(debug["matches"])
+
+            print(f"\n[{index}] Pair: /{left}/ /{right}")
+            if debug["missing_glyph"]:
+                print("    ⚠️ Missing glyph in font")
+            print(f"    Left keys tried: {debug['left_keys']}")
+            print(f"    Right keys tried: {debug['right_keys']}")
+
+            if debug["matches"]:
+                for lk, rk, value in debug["matches"]:
+                    print(f"    ✅ Kerning found: {lk} + {rk} = {value}")
+            else:
+                print("    ❌ No kerning found for these keys")
+
+            if has_kerning:
+                print("    ACTION: HIDE")
+                hidden.append((left, right))
+            else:
+                print("    ACTION: KEEP")
+                visible.append((left, right))
+
+        try:
+            perLine = self.getCurrentPerLine()
+        except:
+            perLine = 8
+
+        try:
+            gap_spaces = int(self.w.tabs[1].gapSpaces.get())
+        except:
+            gap_spaces = 4
+
+        gap = " " * gap_spaces
+        lines = self.format_pairs_columns(visible, perLine, gap)
+        tab.text = "\n".join(lines)
+
+        print("\n🙈 HIDE KERN TAB SUMMARY")
+        print(f"   Total pairs: {len(pairs)}")
+        print(f"   Hidden existing pairs: {len(hidden)}")
+        print(f"   Visible pending pairs: {len(visible)}")
+        print(f"   Rebuilt tab lines: {len(lines)}")
+        print("=" * 80)
+    
+    # -----------------------------
     # FUNCIÓN: DELETE TAB KERN
     # -----------------------------
     
@@ -2021,6 +2186,10 @@ class KingSubditKerningEngine:
             return
 
         positive_only = self.getCurrentPositiveOnly()
+        try:
+            preserve_existing = self.w.tabs[0].preserveExisting.get()
+        except:
+            preserve_existing = False
     
         if positive_only:
             print("\n🔧 MODE: POSITIVE KERNING")
@@ -2054,6 +2223,7 @@ class KingSubditKerningEngine:
         skipped_no_kern = 0
         skipped_condition = 0
         skipped_no_margin = 0
+        skipped_existing = 0
 
         for Lname, Rname in pairs:
             if self._is_glyph_no_kern_for_position(Lname, no_kern_left, "first"):
@@ -2062,6 +2232,10 @@ class KingSubditKerningEngine:
             
             if self._is_glyph_no_kern_for_position(Rname, no_kern_right, "second"):
                 skipped_no_kern += 1
+                continue
+
+            if preserve_existing and self._has_group_kerning_only(font, masterID, Lname, Rname):
+                skipped_existing += 1
                 continue
 
             current = margin_for_pair(font, masterID, Lname, Rname)
@@ -2085,12 +2259,11 @@ class KingSubditKerningEngine:
             gR = font.glyphs[Rname]
 
             if positive_only:
+                # explicit exception pair (glyph-glyph)
                 leftKey = Lname
-                if gR.leftKerningGroup:
-                    rightKey = f"@MMK_R_{gR.leftKerningGroup}"
-                else:
-                    rightKey = Rname
+                rightKey = Rname
             else:
+                # normal grouped kerning
                 leftKey = gL.rightKerningKey
                 rightKey = gR.leftKerningKey
 
@@ -2102,6 +2275,7 @@ class KingSubditKerningEngine:
         print(f"Total pairs: {len(pairs)}")
         print(f"Kerned: {applied}")
         print(f"Skipped NoKern: {skipped_no_kern}")
+        print(f"Skipped existing: {skipped_existing}")
         print(f"Skipped condition: {skipped_condition}")
         print(f"Skipped no margin: {skipped_no_margin}")
     
@@ -3568,7 +3742,7 @@ class KingSubditKerningEngine:
         """Show selected pairs in a new tab."""
         if not hasattr(self, '_currentDisplayPairsTurbo'):
             self._currentDisplayPairsTurbo = []
-        
+    
         rows = self._currentDisplayPairsTurbo
         sel = self.w.tabs[2].pairsList.getSelection()
 
@@ -3581,23 +3755,67 @@ class KingSubditKerningEngine:
             for i in sel:
                 if i < len(rows):
                     row = rows[i]
+                    # Skip separator rows
                     if row.get("Left") == "────" and row.get("Right") == "────":
                         continue
+            
+                    # Get original data correctly
+                    if "_originalData" in row:
+                        original_data = row["_originalData"]
+                        left = original_data.get("_productionLeft", original_data.get("Left", row["Left"]))
+                        right = original_data.get("_productionRight", original_data.get("Right", row["Right"]))
+                        value = original_data.get("Value", row["Value"])
+                    else:
+                        # Fallback for rows without original data
+                        left = row.get("Left", "")
+                        right = row.get("Right", "")
+                        value = row.get("Value", "")
                 
-                    original_data = row.get("_originalData", row)
-                
-                    left = original_data.get("_productionLeft", row["Left"])
-                    right = original_data.get("_productionRight", row["Right"])
-                    value = original_data.get("Value", row["Value"])
-                
-                    lines.append(self.contextualDisplayTurbo(left, right, value))
+                    # Ensure we have valid values
+                    if left and right:
+                        # Get prefix/suffix from Tools tab settings
+                        prefix = self.w.tabs[2].prefixInput.get().strip() or "HH"
+                        suffix = self.w.tabs[2].suffixInput.get().strip() or "HH"
+                    
+                        # Apply contextual affixes if enabled
+                        if self.getCurrentContextualAffixes():
+                            # Use the same logic as in format_pairs_columns
+                            prefix, suffix = self._get_contextual_affixes(left, right)
+                    
+                        # Format the string correctly with slashes
+                        prefix_str = self.glyphString(prefix) if prefix else ""
+                        suffix_str = self.glyphString(suffix) if suffix else ""
+                    
+                        # Create the final string
+                        if prefix_str and suffix_str:
+                            pair_string = f"{prefix_str}/{left}/{right}{suffix_str}"
+                        elif prefix_str:
+                            pair_string = f"{prefix_str}/{left}/{right}"
+                        elif suffix_str:
+                            pair_string = f"/{left}/{right}{suffix_str}"
+                        else:
+                            pair_string = f"/{left}/{right}"
+                    
+                        lines.append(f"{pair_string}    {value}")
         
             if lines:
                 Glyphs.font.newTab("\n".join(lines))
                 Message("Tab created", f"Created tab with {len(lines)} pair(s).", OKButton="OK")
+            else:
+                Message("No valid pairs", "No valid pairs were selected.", OKButton="OK")
+            
         except Exception as e:
             print(f"Error showing selection: {e}")
+            traceback.print_exc()
             Message("Error", f"Error creating tab: {e}", OKButton="OK")
+    def closeAllTabsCallback(self, sender):
+        """Close all open tabs."""
+        font = Glyphs.font
+        if font:
+            while len(font.tabs) > 0:
+                font.tabs[-1].close()
+
+    # Agrega estos métodos después del método closeAllTabsCallback existente
 
     def listAllPairsCallback(self, sender):
         """List all kerning pairs in tabs."""
@@ -3605,7 +3823,7 @@ class KingSubditKerningEngine:
         if not font:
             Message("No font", "Please open a font first.", OKButton="OK")
             return
-        
+    
         try:
             pairs_per_tab = int(self.w.tabs[2].pairsPerInput.get())
         except:
@@ -3630,7 +3848,7 @@ class KingSubditKerningEngine:
                 if val is not None:
                     left_glyph = self.resolveKeyTurbo(left_key)
                     right_glyph = self.resolveKeyTurbo(right_key)
-                    
+                
                     if left_glyph and right_glyph:
                         all_pairs.append({
                             'left': left_glyph,
@@ -3678,7 +3896,9 @@ class KingSubditKerningEngine:
         if font:
             while len(font.tabs) > 0:
                 font.tabs[-1].close()
-
+                
+                
+                
 
 # Ejecutar
 KingSubditKerningEngine()

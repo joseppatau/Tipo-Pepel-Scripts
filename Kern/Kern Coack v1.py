@@ -1,7 +1,7 @@
 # MenuTitle: Kern Coach v1
 # -*- coding: utf-8 -*-
-# Description: Applies negative kerning adjustments to reduce excessive spacing between glyph pairs.  
-Uses geometric distance calculations to determine optimal spacing and avoid over-tightening.
+# Description: Applies negative kerning adjustments to reduce excessive spacing between glyph pairs.
+# Uses geometric distance calculations to determine optimal spacing and avoid over-tightening.
 # Author: Designed by Josep Patau Bellart, programmed with AI tools
 # If you find this script useful, you can show your appreciation by purchasing any font at: https://www.myfonts.com/collections/tipo-pepel-foundry
 # License: Apache2
