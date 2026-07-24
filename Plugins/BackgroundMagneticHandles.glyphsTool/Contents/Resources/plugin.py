@@ -1,13 +1,34 @@
+import objc
 from GlyphsApp.plugins import *
+from GlyphsApp.plugins import pathForResource
 from GlyphsApp import Glyphs, OFFCURVE, CURVE
+from AppKit import NSImage
 import traceback
 
 
 class BackgroundMagneticHandles(SelectTool):
 
+    @objc.python_method
     def settings(self):
         self.name = "Background Magnetic Handles"
         self.keyboardShortcut = 'm'
+        self._toolBarIcon = self.loadToolbarIcon()
+
+    @objc.python_method
+    def loadToolbarIcon(self):
+        iconPath = pathForResource("toolbar", "pdf", __file__)
+        if not iconPath:
+            return None
+        icon = NSImage.alloc().initWithContentsOfFile_(iconPath)
+        if icon:
+            icon.setTemplate_(True)
+        return icon
+
+    def toolBarIcon(self):
+        return self._toolBarIcon
+
+    def toolbarIcon(self):
+        return self.toolBarIcon()
 
     def mouseDragged_(self, event):
 
