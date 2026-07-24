@@ -2,17 +2,21 @@ import objc
 from GlyphsApp.plugins import *
 from GlyphsApp.plugins import pathForResource
 from GlyphsApp import Glyphs, OFFCURVE, CURVE
-from AppKit import NSImage
+from AppKit import NSImage, NSMakeRect, NSMenuItem, NSSlider, NSTextField, NSView
 import traceback
 
 
 class BackgroundMagneticHandles(SelectTool):
+
+    DEFAULT_TOLERANCE = 15.0
+    DEFAULTS_KEY = "com.tipopepel.BackgroundMagneticHandles.tolerance"
 
     @objc.python_method
     def settings(self):
         self.name = "Background Magnetic Handles"
         self.keyboardShortcut = 'm'
         self._toolBarIcon = self.loadToolbarIcon()
+        self._toleranceLabel = None
 
     @objc.python_method
     def loadToolbarIcon(self):
@@ -30,6 +34,55 @@ class BackgroundMagneticHandles(SelectTool):
     def toolbarIcon(self):
         return self.toolBarIcon()
 
+    @objc.python_method
+    def tolerance(self):
+        try:
+            value = Glyphs.defaults[self.DEFAULTS_KEY]
+            return float(value)
+        except Exception:
+            return self.DEFAULT_TOLERANCE
+
+    @objc.python_method
+    def setTolerance(self, value):
+        value = max(1.0, min(80.0, float(value)))
+        Glyphs.defaults[self.DEFAULTS_KEY] = value
+        if self._toleranceLabel:
+            self._toleranceLabel.setStringValue_("Tolerance: %.0f units" % value)
+
+    def toleranceSliderChanged_(self, sender):
+        self.setTolerance(sender.floatValue())
+
+    def addMenuItemsForEvent_toMenu_(self, event, menu):
+        menu.addItem_(NSMenuItem.separatorItem())
+
+        titleItem = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Background Magnetic Handles", None, ""
+        )
+        titleItem.setEnabled_(False)
+        menu.addItem_(titleItem)
+
+        item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("", None, "")
+        view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, 220, 46))
+
+        label = NSTextField.alloc().initWithFrame_(NSMakeRect(12, 24, 196, 18))
+        label.setEditable_(False)
+        label.setBordered_(False)
+        label.setDrawsBackground_(False)
+        label.setStringValue_("Tolerance: %.0f units" % self.tolerance())
+        view.addSubview_(label)
+        self._toleranceLabel = label
+
+        slider = NSSlider.alloc().initWithFrame_(NSMakeRect(12, 4, 196, 20))
+        slider.setMinValue_(1.0)
+        slider.setMaxValue_(80.0)
+        slider.setFloatValue_(self.tolerance())
+        slider.setTarget_(self)
+        slider.setAction_("toleranceSliderChanged:")
+        view.addSubview_(slider)
+
+        item.setView_(view)
+        menu.addItem_(item)
+
     def mouseDragged_(self, event):
 
         try:
@@ -46,7 +99,7 @@ class BackgroundMagneticHandles(SelectTool):
             if not bg:
                 return
 
-            tolerance = 15.0  # Tolerancia intermedia
+            tolerance = self.tolerance()
 
             # Recopilar todos los nodos seleccionados
             selected_nodes = []
